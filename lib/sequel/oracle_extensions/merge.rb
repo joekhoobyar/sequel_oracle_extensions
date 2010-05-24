@@ -67,7 +67,7 @@ module Sequel
 		  
 		# The SQL fragment specifying the columns and values to UPDATE
 		def merge_update_sql(sql)
-		  return if (values = @opts[:update]).empty?
+		  return if not (values = @opts[:update]) or values.empty?
 			values = Hash[values] if Array===values and values.all?{|v| Array===v && v.size==2}
 		  if Hash === values
 		    values = @opts[:defaults].merge(values) if @opts[:defaults]
@@ -82,7 +82,7 @@ module Sequel
 		
 		# The SQL fragment specifying the columns and values to INSERT
 		def merge_insert_sql(sql)
-		  return if @opts[:insert].empty?
+		  return if not @opts[:insert] or @opts[:insert].empty?
 		  columns, values = [], []
 		  @opts[:insert].each do |k,v|
 		    columns.push(k.is_a?(String) && !k.is_a?(LiteralString) ? quote_identifier(k) : literal(k))
