@@ -22,7 +22,13 @@ Gem::Specification.new do |s|
      "LICENSE",
      "README.rdoc",
      "Rakefile",
+     "VERSION",
+     "lib/sequel/oracle_extensions.rb",
+     "lib/sequel/oracle_extensions/hints.rb",
+     "lib/sequel/oracle_extensions/merge.rb",
+     "lib/sequel/oracle_extensions/schemata.rb",
      "lib/sequel_oracle_extensions.rb",
+     "sequel_oracle_extensions.gemspec",
      "spec/sequel_oracle_extensions_spec.rb",
      "spec/spec.opts",
      "spec/spec_helper.rb"
