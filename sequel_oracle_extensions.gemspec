@@ -19,6 +19,7 @@ Gem::Specification.new do |s|
   s.files = [
     ".document",
      ".gitignore",
+     ".rspec",
      "LICENSE",
      "README.rdoc",
      "Rakefile",
@@ -29,8 +30,8 @@ Gem::Specification.new do |s|
      "lib/sequel/oracle_extensions/schemata.rb",
      "lib/sequel_oracle_extensions.rb",
      "sequel_oracle_extensions.gemspec",
-     "spec/sequel_oracle_extensions_spec.rb",
-     "spec/spec.opts",
+     "spec/sequel/oracle_extensions/hints_spec.rb",
+     "spec/sequel/oracle_extensions/merge_spec.rb",
      "spec/spec_helper.rb"
   ]
   s.homepage = %q{http://github.com/joekhoobyar/sequel_oracle_extensions}
@@ -39,7 +40,8 @@ Gem::Specification.new do |s|
   s.rubygems_version = %q{1.3.6}
   s.summary = %q{Oracle MERGE, optimizer hints, an schema extensions for Sequel}
   s.test_files = [
-    "spec/sequel_oracle_extensions_spec.rb",
+    "spec/sequel/oracle_extensions/hints_spec.rb",
+     "spec/sequel/oracle_extensions/merge_spec.rb",
      "spec/spec_helper.rb"
   ]
 
@@ -49,14 +51,14 @@ Gem::Specification.new do |s|
 
     if Gem::Version.new(Gem::RubyGemsVersion) >= Gem::Version.new('1.2.0') then
       s.add_runtime_dependency(%q<sequel>, [">= 3.10.0"])
-      s.add_development_dependency(%q<rspec>, [">= 1.2.9"])
+      s.add_development_dependency(%q<rspec>, [">= 2.0.0.beta.8"])
     else
       s.add_dependency(%q<sequel>, [">= 3.10.0"])
-      s.add_dependency(%q<rspec>, [">= 1.2.9"])
+      s.add_dependency(%q<rspec>, [">= 2.0.0.beta.8"])
     end
   else
     s.add_dependency(%q<sequel>, [">= 3.10.0"])
-    s.add_dependency(%q<rspec>, [">= 1.2.9"])
+    s.add_dependency(%q<rspec>, [">= 2.0.0.beta.8"])
   end
 end
 
