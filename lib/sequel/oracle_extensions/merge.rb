@@ -99,7 +99,7 @@ module Sequel
 	  
 	  def _merge_sql
       _merge_alias_tables
-      opts[:on] = opts[:on].inject(nil) do |a,b|
+      @opts[:on] = @opts[:on].inject(nil) do |a,b|
         b = _merge_expressions b
         b = filter_expr((Array===b && b.size==1) ? b.first : b)
         a ? SQL::BooleanExpression.new(:AND, a, b) : b
@@ -149,11 +149,13 @@ module Sequel
 	  # Utility method to qualify column pairs to the target and source table aliases.
 	  def _merge_column_pairs(pairs)
 	    t1, t2 = _merge_table_aliases
-	    pairs.collect do |k, v|
+	    merged = pairs.collect do |k, v|
 	      k = qualified_column_name(k, t1) if k.is_a?(Symbol)
 	      v = qualified_column_name(v, t2) if v.is_a?(Symbol)
 	      [k,v]
 	    end
+	    merged = Hash[*merged.flatten] if Hash === pairs
+	    merged
 	  end
 
     # Module used by Dataset#merge that has the effect of making all
