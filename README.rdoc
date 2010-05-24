@@ -1,6 +1,6 @@
 = sequel_oracle_extensions
 
-Description goes here.
+Oracle extensions for  Sequel, including MERGE statements, optimizer hints, and schema extensions.
 
 == Note on Patches/Pull Requests
  
