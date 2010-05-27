@@ -51,7 +51,7 @@ ORDER BY status DESC, constraint_name, cc.position
 	    def primary_key(table, options={})
 	      sql, m = SELECT_PRIMARY_KEY_SQL, output_identifier_meth
 	      table, pks = m[table], []
-        pkh = Hash.new{|h,k| pks.push(h[k] = {:table_name=>table, :columns=>[]}) }
+        pkh = Hash.new{|h,k| pks.push(h[k]=v={:table_name=>table, :columns=>[]}); v }
 
 	      unless (z = options[:enabled]).nil?
 	        sql = sql.sub /WHERE /, "WHERE c.status = #{z ? 'ENABLED' : 'DISABLED'}"
