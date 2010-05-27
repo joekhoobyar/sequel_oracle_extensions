@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{sequel_oracle_extensions}
-  s.version = "0.5.0"
+  s.version = "0.5.1"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Joe Khoobyar"]
-  s.date = %q{2010-05-24}
+  s.date = %q{2010-05-27}
   s.description = %q{Oracle extensions for Sequel, including MERGE statements, optimizer hints, and schema extensions.}
   s.email = %q{joe@ankhcraft.com}
   s.extra_rdoc_files = [
