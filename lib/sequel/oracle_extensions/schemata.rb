@@ -41,19 +41,37 @@ ORDER BY status DESC, constraint_name, cc.position
 	      ixs
 	    end
 	        
-	    # Returns the primary key for the given table.
-	    def primary_key(table)
-		    m = output_identifier_meth
-	      table = m[table]
-        pks = Hash.new{|h,k| h[k] = {:table_name=>table, :columns=>[]}}
-	      metadata_dataset.with_sql(SELECT_PRIMARY_KEY_SQL, table.to_s.upcase).each do |r|
+	    # Returns the primary key for the given table, as a hash.
+	    #
+      # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
+      #   looks for all matching keys.
+      # * <tt>:all</tt> - Returns all matching keys.  By default, returns the first matching key - provided
+      #   that either there is only one key or that only the key is enabled.
+      # * <tt>:first</tt> - Returns the first matching key.
+	    def primary_key(table, options={})
+	      sql, m = SELECT_PRIMARY_KEY_SQL, output_identifier_meth
+	      table, pks = m[table], []
+        pkh = Hash.new{|h,k| pks.push(h[k] = {:table_name=>table, :columns=>[]}) }
+
+	      unless (z = options[:enabled]).nil?
+	        sql = sql.sub /WHERE /, "WHERE c.status = #{z ? 'ENABLED' : 'DISABLED'}"
+	      end
+
+	      metadata_dataset.with_sql(sql, table.to_s.upcase).each do |r|
+	        if options[:first] && pks.length==1 && r[:constraint_name] != pks[:constraint_name]
+		        return pks.first
+		      end
+
 	        r = Hash[ r.map{|k,v| [k, (k==:status || v.nil? || v=='') ? v : m[v]]} ]
-          pk = pks[m.call r.delete(:constraint_name)]
+          pk = pkh[m.call r[:constraint_name]]
 	        pk[:enabled] = r.delete(:status)=='ENABLED'
 	        pk[:columns] << r.delete(:column_name)
 	        pk.update r
 	      end
-	      return pks.first.last if pks.size <= 1 or pks[0][:enabled] == pks[1][:enabled]
+
+	      unless options[:all] or (pks.length>1 and pks[0][:enabled] != pks[1][:enabled])
+		      return pks.first
+		    end
 	      pks
 	    end
     end
