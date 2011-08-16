@@ -11,7 +11,7 @@ begin
     gem.homepage = "http://github.com/joekhoobyar/sequel_oracle_extensions"
     gem.authors = ["Joe Khoobyar"]
     gem.add_dependency "sequel", ">= 3.10.0" 
-    gem.add_development_dependency "rspec", ">= 2.0.0.beta.8"
+    gem.add_development_dependency "rspec", ">= 2.0.0"
     # gem is a Gem::Specification... see http://www.rubygems.org/read/chapter/20 for additional settings
   end
   Jeweler::GemcutterTasks.new
@@ -20,10 +20,10 @@ rescue LoadError
 end
 
 require 'rspec/core/rake_task'
-Rspec::Core::RakeTask.new(:rspec) do |spec|
+RSpec::Core::RakeTask.new(:rspec) do |spec|
   spec.pattern = FileList['spec/**/*_spec.rb']
 end
-Rspec::Core::RakeTask.new(:rcov) do |spec|
+RSpec::Core::RakeTask.new(:rcov) do |spec|
   spec.pattern = 'spec/**/*_spec.rb'
   spec.rcov = true
 end
