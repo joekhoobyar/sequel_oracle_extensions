@@ -121,6 +121,35 @@ ORDER BY }
 
 	      fks
 	    end
+	    
+	    # Returns foreign keys that refer to the given +table+ (or +schema.table+), as an array of hashes.
+	    #
+      # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
+      #   looks for all matching keys.
+	    def references(qualified_table, options={})
+	    	ds, result    = metadata_dataset, []
+	    	schema, table = ds.schema_and_table(qualified_table)
+	    	x_cons        = schema.nil? ? 'user_cons' : 'all_cons'
+	    	inm           = ds.identifier_input_method
+	      hash          = Hash.new{|h,k| result.push(:constraint_name=>ds.send(:output_identifier,k), :columns=>[]); h[k] = result.last }
+	    	
+	    	ds = ds.select(:f__constraint_name, :f__table_name, :f__rely, :f__status, :f__validated, :fc__column_name).
+				        from(:"#{x_cons}traints___f").
+				        join(:"#{x_cons}_columns___fc", [[:owner,:owner], [:constraint_name,:constraint_name]]).
+				        join(:"#{x_cons}traints___t", [[:owner,:f__r_owner], [:constraint_name,:f__r_constraint_name]]).
+				        where(:f__constraint_type=>'R', :t__constraint_type=>'P', :t__table_name=>table.to_s.send(inm))
+				ds = ds.where(:t__owner=>schema.to_s.send(inm)) unless schema.nil?
+        ds.order(:table_name, :constraint_name, :fc__position).each do |row|
+        	hash[row[:constraint_name]].tap do |ref|
+	        	ref[:table_name]||= ds.send(:output_identifier,row.delete(:table_name))
+	        	ref[:columns]   <<  ds.send(:output_identifier,row.delete(:column_name))
+	        	ref[:rely]      ||= row.delete(:rely)=='RELY'
+	        	ref[:enabled]   ||= row.delete(:status)=='ENABLED'
+	        	ref[:validated] ||= row.delete(:validated)=='VALIDATED'
+	        end
+        end
+        result
+	    end
     end
   end
 end
