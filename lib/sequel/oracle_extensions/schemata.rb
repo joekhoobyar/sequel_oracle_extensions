@@ -49,22 +49,24 @@ ORDER BY }
       # * <tt>:all</tt>     - Return an array of matching keys, instead of the first matching key.
       #
 	    def primary_key(qualified_table, options={})
-	    	result = table_constraints(qualified_table, options) do |ds,table_name,x_cons|
-	        ds.where(:c__constraint_type=>'P', :c__table_name=>table_name).
-	           order(:status.desc, :index_name, :cc__position)
-				end
+	    	result = table_constraints qualified_table, 'P', options
 				options[:all] ? result : result.first
 	    end
 
-	    # Returns the foreign keys defined on the given +table+ (or +schema.table+), as an array of hashes.
+	    # Returns unique constraints defined on the given +table+ (or +schema.table+), as an array of hashes.
+	    #
+      # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
+      #   looks for all matching keys.
+	    def unique_keys(qualified_table, options={})
+	    	table_constraints qualified_table, 'U', options
+	    end
+	    
+	    # Returns foreign keys defined on the given +table+ (or +schema.table+), as an array of hashes.
 	    #
       # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
       #   looks for all matching keys.
 	    def foreign_keys(qualified_table, options={})
-	    	table_constraints(qualified_table, options) do |ds,table_name,x_cons|
-	        ds.where(:c__constraint_type=>'R', :c__table_name=>table_name).
-	           order(:table_name, :constraint_name, :cc__position)
-				end
+	    	table_constraints qualified_table, 'R', options
 	    end
 	    
 	    # Returns foreign keys that refer to the given +table+ (or +schema.table+), as an array of hashes.
@@ -72,49 +74,61 @@ ORDER BY }
       # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
       #   looks for all matching keys.
 	    def references(qualified_table, options={})
-	    	table_constraints(qualified_table, options) do |ds,table_name,x_cons|
-	        ds.join(:"#{x_cons}traints___t", [[:owner,:c__r_owner], [:constraint_name,:c__r_constraint_name]]).
-	           where(:c__constraint_type=>'R', :t__constraint_type=>'P', :t__table_name=>table_name).
-	           order(:table_name, :constraint_name, :cc__position)
-				end
+	    	table_constraints qualified_table, 'R', options.merge(:table_name_column=>:t__table_name)
 	    end
 	    
 	  private
 	  	
 	  	# Internal helper method for introspection of table constraints.
-	  	def table_constraints(qualified_table,options={})
+	  	def table_constraints(qualified_table, constraint_type, options={})
 	    	ds, result    = metadata_dataset, []
-	    	schema, table = ds.schema_and_table(qualified_table)
+				outm          = lambda{|k| ds.send :output_identifier, k}
+	    	schema, table = ds.schema_and_table(qualified_table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
 	    	x_cons        = schema.nil? ? 'user_cons' : 'all_cons'
-	    	inm           = ds.identifier_input_method
 	    	
 	    	# Build the dataset and apply filters for introspection of constraints.
 				# Also allows the caller to customize the dataset.
-	    	ds = ds.select(:c__constraint_name, :c__table_name, :c__rely, :c__status, :c__validated,
-	    	               :cc__column_name, :c__index_name, :c__constraint_type).
+	    	ds = ds.select(:c__constraint_name, :c__table_name, :c__rely, :c__status, :c__validated, :cc__column_name).
 				        from(:"#{x_cons}traints___c").
-				        join(:"#{x_cons}_columns___cc", [[:owner,:owner], [:constraint_name,:constraint_name]])
+				        join(:"#{x_cons}_columns___cc", [ [:owner,:owner], [:constraint_name,:constraint_name] ]).
+								where((options[:table_name_column]||:c__table_name)=>table, :c__constraint_type=>constraint_type).
+	              order(:table_name, :status.desc, :constraint_name, :cc__position)
 				unless schema.nil?
-					ds = ds.where :c__owner => schema.to_s.send(inm)
+					ds = ds.where :c__owner => schema
 				end
 				unless (z = options[:enabled]).nil?
-					ds = ds.where :status => (z ? 'ENABLED' : 'DISABLED')
+					ds = ds.where :c__status => (z ? 'ENABLED' : 'DISABLED')
 				end
-				ds = yield ds, table.to_s.send(inm), x_cons
+
+				if constraint_type == 'R'
+	        ds = ds.select_more(:c__r_constraint_name, :t__table_name.as(:r_table_name)).
+					        join(:"#{x_cons}traints___t", [ [:owner,:c__r_owner], [:constraint_name,:c__r_constraint_name] ]).
+	                where(:t__constraint_type=>'P')
+				else
+	        ds = ds.select_more(:c__index_name)
+				end
+				ds = yield ds, table if block_given?
 				
 				# Return the table constraints as an array of hashes, including a column list.
 	      hash = Hash.new do |h,k|
-	      	result.push :constraint_name=>ds.send(:output_identifier,k), :columns=>[]
+	      	result.push :constraint_name=>outm[k], :constraint_type=>constraint_type, :columns=>[]
 	      	h[k] = result.last
 	      end
         ds.each do |row|
         	ref = hash[row[:constraint_name]]
-        	ref[:table_name]||= ds.send(:output_identifier,row.delete(:table_name))
-        	ref[:columns]   <<  ds.send(:output_identifier,row.delete(:column_name))
-        	ref[:rely]      ||= row.delete(:rely)=='RELY'
-        	ref[:enabled]   ||= row.delete(:status)=='ENABLED'
-        	ref[:validated] ||= row.delete(:validated)=='VALIDATED'
-        	ref[:index_name]||= ds.send(:output_identifier,row.delete(:index_name)) if row[:index_name]
+        	ref[:table_name]        ||= outm[row[:table_name]]
+        	ref[:rely]              ||= row[:rely]=='RELY'
+        	ref[:enabled]           ||= row[:status]=='ENABLED'
+        	ref[:validated]         ||= row[:validated]=='VALIDATED'
+        	ref[:columns]           <<  outm[row[:column_name]]
+
+					if row.include? :r_constraint_name
+						ref[:r_constraint_name] ||= outm[row[:r_constraint_name]]
+						ref[:r_table_name]      ||= outm[row[:r_table_name]]
+					end
+					if row[:index_name]
+						ref[:index_name]        ||= outm[row[:index_name]]
+					end
         end
         result
 	  	end
