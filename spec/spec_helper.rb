@@ -18,8 +18,8 @@ DATABASE_URL = begin
   "oracle://#{user}:#{password}@#{host}#{port}/#{name}"
 end
 
-Rspec.configure do |config|
+RSpec.configure do |config|
   require 'rspec/expectations'
-  config.include Rspec::Matchers
+  config.include RSpec::Matchers
   config.mock_with :rspec
 end
