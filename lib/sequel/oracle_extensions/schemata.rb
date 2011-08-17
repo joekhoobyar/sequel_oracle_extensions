@@ -6,40 +6,51 @@ module Sequel
   module Oracle
     module DatabaseMethods
       
-			SELECT_INDEXES_SQL = %q{
-SELECT i.index_name, i.status, i.uniqueness, ic.column_name
-FROM all_indexes i
-	INNER JOIN all_ind_columns ic
-		ON ic.index_owner = i.owner AND ic.index_name = i.index_name 
-WHERE i.table_name = ? AND i.dropped = 'NO'
-ORDER BY status DESC, index_name, ic.column_position
-		  }.freeze
-      
-	    # Returns the indexes for the given table. By default, it does not return primary keys.
+	    # Returns the indexes for the given +table+ (or +schema.table+), as an array of hashes.
+			# By default, it does not return primary keys.
 	    #
-      # * <tt>:all</tt> - Returns all indexes, even primary keys.
-	    def indexes(table, options={})
-	      sql, m = SELECT_INDEXES_SQL, output_identifier_meth
-	      table = m[table]
-		    ixs = Hash.new{|h,k| h[k] = {:table_name=>table, :columns=>[]}}
-		    
-		    if options[:all]
-	        sql = sql.sub /ORDER BY /, %q{ AND NOT EXISTS (
-	SELECT uc.index_name FROM all_constraints uc
-	WHERE uc.index_name = i.index_name AND uc.owner = i.owner AND uc.constraint_type = 'P'
-)
-ORDER BY }
-		    end
+      # * <tt>:valid</tt> - Only look for indexes that are valid (true) or unusable (false). By default (nil),
+      #   looks for any matching index.
+      # * <tt>:all</tt> - Returns all indexes, even ones used for primary keys.
+	    def indexes(qualified_table, options={})
+	    	ds, result    = metadata_dataset, []
+				outm          = lambda{|k| ds.send :output_identifier, k}
+	    	schema, table = ds.schema_and_table(qualified_table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
+	    	
+	    	# Build the dataset and apply filters for introspection of indexes.
+	    	ds = ds.select(:i__index_name, :i__status, :i__uniqueness, :i__visibility,
+				               :i__index_type, :i__join_index, :ic__column_name).
+				        from(:"all_indexes___i").
+				        join(:"all_ind_columns___ic", [ [:index_owner,:owner], [:index_name,:index_name] ]).
+								where(:i__table_name=>table, :i__dropped=>'NO').
+	              order(:status.desc, :index_name, :ic__column_position)
+				unless schema.nil?
+					ds = ds.where :i__owner => schema
+				end
+				unless (z = options[:valid]).nil?
+					ds = ds.where :i__status => (z ? 'VALID' : 'UNUSABLE')
+				end
+				if options[:all]
+				  pk = from(:all_constraints.as(:c)).where(:c__constraint_type=>'P').
+					     where(:c__index_name=>:i__index_name, :c__owner=>:i__owner)
+					ds = ds.where ~pk.exists
+				end
 
-	      metadata_dataset.with_sql(SELECT_INDEXES_SQL, table.to_s.upcase).each do |r|
-	        r = Hash[ r.map{|k,v| [k, (k==:index_name || k==:column_name) ? m[v] : v]} ]
-		      ix = ixs[m.call r.delete(:index_name)]
-	        ix[:valid] = r.delete(:status)=='VALID'
-	        ix[:unique] = r.delete(:uniqueness)=='UNIQUE'
-	        ix[:columns] << r.delete(:column_name)
-	        ix.update r
+				# Return the table constraints as an array of hashes, including a column list.
+	      hash = Hash.new do |h,k|
+	      	result.push :index_name=>outm[k], :table_name=>outm[table], :columns=>[]
+	      	h[k] = result.last
 	      end
-	      ixs
+        ds.each do |row|
+        	ref = hash[row[:index_name]]
+					ref[:index_type]        ||= row[:index_type]
+					ref[:join_index]        ||= row[:join_index]=='YES'
+        	ref[:status]            ||= row[:status]=='VALID'
+        	ref[:uniqueness]        ||= row[:uniqueness]=='UNIQUE'
+        	ref[:visibility]        ||= row[:visibility]=='VISIBLE'
+        	ref[:columns]           <<  outm[row[:column_name]]
+        end
+        result
 	    end
 
 	    # Returns the primary key for the given +table+ (or +schema.table+), as a hash.
