@@ -45,7 +45,7 @@ module Sequel
         	ref[:partitioned]       = row[:partitioned]=='YES'
         	ref[:valid]             = row[:status]=='VALID'
         	ref[:uniqueness]        = row[:uniqueness]=='UNIQUE'
-        	ref[:visibility]        = row[:visibility]=='VISIBLE'
+        	ref[:visible]           = row[:visibility]=='VISIBLE'
         	ref[:compression]       = row[:compression]!='DISABLED'
         	ref[:tablespace]        = row[:tablespace_name]
         	ref[:columns]           <<  outm[row[:column_name]]
