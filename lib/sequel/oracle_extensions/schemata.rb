@@ -45,7 +45,7 @@ module Sequel
         	ref = hash[row[:index_name]]
 					ref[:index_type]        ||= row[:index_type]
 					ref[:join_index]        ||= row[:join_index]=='YES'
-        	ref[:status]            ||= row[:status]=='VALID'
+        	ref[:valid]             ||= row[:status]=='VALID'
         	ref[:uniqueness]        ||= row[:uniqueness]=='UNIQUE'
         	ref[:visibility]        ||= row[:visibility]=='VISIBLE'
         	ref[:columns]           <<  outm[row[:column_name]]
