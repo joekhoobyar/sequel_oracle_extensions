@@ -18,19 +18,16 @@ module Sequel
 	    	schema, table = ds.schema_and_table(qualified_table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
 	    	
 	    	# Build the dataset and apply filters for introspection of indexes.
-	    	ds = ds.select(:i__index_name, :i__status, :i__uniqueness, :i__visibility,
-				               :i__index_type, :i__join_index, :ic__column_name).
+	    	ds = ds.select(:i__index_name, :i__index_type, :i__join_index, :i__partitioned,
+	    	               :i__status, :i__uniqueness, :i__visibility, :i__compression, :i__tablespace_name,
+				               :ic__column_name).
 				        from(:"all_indexes___i").
 				        join(:"all_ind_columns___ic", [ [:index_owner,:owner], [:index_name,:index_name] ]).
 								where(:i__table_name=>table, :i__dropped=>'NO').
 	              order(:status.desc, :index_name, :ic__column_position)
-				unless schema.nil?
-					ds = ds.where :i__owner => schema
-				end
-				unless (z = options[:valid]).nil?
-					ds = ds.where :i__status => (z ? 'VALID' : 'UNUSABLE')
-				end
-				if options[:all]
+				ds = ds.where :i__owner => schema unless schema.nil?
+				ds = ds.where :i__status => (options[:valid] ? 'VALID' : 'UNUSABLE') unless options[:valid].nil?
+				unless options[:all]
 				  pk = from(:all_constraints.as(:c)).where(:c__constraint_type=>'P').
 					     where(:c__index_name=>:i__index_name, :c__owner=>:i__owner)
 					ds = ds.where ~pk.exists
@@ -43,11 +40,14 @@ module Sequel
 	      end
         ds.each do |row|
         	ref = hash[row[:index_name]]
-					ref[:index_type]        ||= row[:index_type]
-					ref[:join_index]        ||= row[:join_index]=='YES'
-        	ref[:valid]             ||= row[:status]=='VALID'
-        	ref[:uniqueness]        ||= row[:uniqueness]=='UNIQUE'
-        	ref[:visibility]        ||= row[:visibility]=='VISIBLE'
+					ref[:index_type]        = row[:index_type]
+					ref[:join_index]        = row[:join_index]=='YES'
+        	ref[:partitioned]       = row[:partitioned]=='YES'
+        	ref[:valid]             = row[:status]=='VALID'
+        	ref[:uniqueness]        = row[:uniqueness]=='UNIQUE'
+        	ref[:visibility]        = row[:visibility]=='VISIBLE'
+        	ref[:compression]       = row[:compression]!='DISABLED'
+        	ref[:tablespace]        = row[:tablespace_name]
         	ref[:columns]           <<  outm[row[:column_name]]
         end
         result
@@ -104,13 +104,8 @@ module Sequel
 				        join(:"#{x_cons}_columns___cc", [ [:owner,:owner], [:constraint_name,:constraint_name] ]).
 								where((options[:table_name_column]||:c__table_name)=>table, :c__constraint_type=>constraint_type).
 	              order(:table_name, :status.desc, :constraint_name, :cc__position)
-				unless schema.nil?
-					ds = ds.where :c__owner => schema
-				end
-				unless (z = options[:enabled]).nil?
-					ds = ds.where :c__status => (z ? 'ENABLED' : 'DISABLED')
-				end
-
+				ds = ds.where :c__owner => schema unless schema.nil?
+				ds = ds.where :c__status => (options[:enabled] ? 'ENABLED' : 'DISABLED') unless options[:enabled].nil?
 				if constraint_type == 'R'
 	        ds = ds.select_more(:c__r_constraint_name, :t__table_name.as(:r_table_name)).
 					        join(:"#{x_cons}traints___t", [ [:owner,:c__r_owner], [:constraint_name,:c__r_constraint_name] ]).
@@ -127,18 +122,18 @@ module Sequel
 	      end
         ds.each do |row|
         	ref = hash[row[:constraint_name]]
-        	ref[:table_name]        ||= outm[row[:table_name]]
-        	ref[:rely]              ||= row[:rely]=='RELY'
-        	ref[:enabled]           ||= row[:status]=='ENABLED'
-        	ref[:validated]         ||= row[:validated]=='VALIDATED'
-        	ref[:columns]           <<  outm[row[:column_name]]
+        	ref[:table_name]        = outm[row[:table_name]]
+        	ref[:rely]              = row[:rely]=='RELY'
+        	ref[:enabled]           = row[:status]=='ENABLED'
+        	ref[:validated]         = row[:validated]=='VALIDATED'
+        	ref[:columns]           << outm[row[:column_name]]
 
 					if row.include? :r_constraint_name
-						ref[:r_constraint_name] ||= outm[row[:r_constraint_name]]
-						ref[:r_table_name]      ||= outm[row[:r_table_name]]
+						ref[:r_constraint_name] = outm[row[:r_constraint_name]]
+						ref[:r_table_name]      = outm[row[:r_table_name]]
 					end
 					if row[:index_name]
-						ref[:index_name]        ||= outm[row[:index_name]]
+						ref[:index_name]        = outm[row[:index_name]]
 					end
         end
         result
