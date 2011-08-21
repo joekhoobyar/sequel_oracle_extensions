@@ -8,14 +8,59 @@ module Sequel
       
       # Return a hash containing index information for the table. Hash keys are index name symbols
       # and values are subhashes.  The superclass method specifies only two keys :columns and :unique.
-      # This extension provides additional keys in the subhash that expose Oracle-specific index attributes.
+      # This implementation provides additional keys in the subhash that expose Oracle-specific index attributes.
       #
 			# By default, this method does not return the primary key index.
-	    #
-      # * <tt>:valid</tt> - Only look for indexes that are valid (true) or unusable (false). By default (nil),
-      #   looks for any matching index.
-      # * <tt>:all</tt> - Returns all indexes, even ones used for primary keys.
+      # Options:
+      # :valid :: Filter by status:  true => only VALID indexes, false => only UNUSABLE indexes
+      # :all :: Return all indexes, including the primary key index.
       #
+      # Example(s):
+      #
+      #   DB.indexes(:people)
+      #   # { :person_gender=>{
+      #   #     :unique=>false,
+      #   #     :valid=>true,
+      #   #     :db_type=>'BITMAP',
+      #   #     :tablespace=>:users,
+      #   #     :partitioned=>false,
+      #   #     :visible=>true,
+      #   #     :compression=>false,
+      #   #     :columns=>[:gender]
+      #   #   },
+      #   #   :person_name=>{
+      #   #     :unique=>false,
+      #   #     :valid=>true,
+      #   #     :db_type=>'NORMAL',
+      #   #     :tablespace=>:users,
+      #   #     :partitioned=>false,
+      #   #     :visible=>true,
+      #   #     :compression=>false,
+      #   #     :columns=>[:last_name, :first_name]
+      #   # } }
+      #
+      #   # NOTE: Passing :all=>true so we can get the primary key index.
+      #   DB.indexes(:employees, :all=>true)
+      #   # { :employee_pk=>{
+      #   #     :unique=>true,
+      #   #     :valid=>true,
+      #   #     :db_type=>'NORMAL',
+      #   #     :tablespace=>:users,
+      #   #     :partitioned=>false,
+      #   #     :visible=>true,
+      #   #     :compression=>false,
+      #   #     :columns=>[:id]
+      #   #   },
+      #   #   :employee_dept=>{
+      #   #     :unique=>false,
+      #   #     :valid=>true,
+      #   #     :db_type=>'BITMAP JOIN',
+      #   #     :tablespace=>:users,
+      #   #     :partitioned=>false,
+      #   #     :visible=>true,
+      #   #     :compression=>false,
+      #   #     :columns=>[:dept_id]
+      #   # } }
 	    def indexes(table, opts={})
 	    	ds, result    = metadata_dataset, []
 				outm          = lambda{|k| ds.send :output_identifier, k}
@@ -43,8 +88,8 @@ module Sequel
 					unless subhash = hash[key]
 						subhash = hash[key] = {
 							:columns=>[], :unique=>(row[:uniqueness]=='UNIQUE'), :valid=>(row[:status]=='VALID'),
-							:db_type=>row[:index_type], :tablespace=>:"#{outm[row[:tablespace_name]]}",
-							:join_index=>(row[:join_index]=='YES'), :partitioned=>(row[:partitioned]=='YES'),
+							:db_type=>"#{row[:index_type]}#{' JOIN' if row[:join_index]=='YES'}",
+							:tablespace=>:"#{outm[row[:tablespace_name]]}", :partitioned=>(row[:partitioned]=='YES'),
 							:visible=>(row[:visibility]=='VISIBLE'), :compression=>(row[:compression]!='DISABLED')
 						}
 					end
@@ -53,37 +98,108 @@ module Sequel
 				hash
 	    end
 
-	    # Returns the primary key for the given +table+ (or +schema.table+), as a hash.
-	    #
-      # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
-      #   looks for any matching key.
-      #
+	    # Returns a hash containing primary key information for the table, or nil if the table has no primary key.
+      # Options:
+      # :enabled :: Filter by status: true => only ENABLED primary key, false => only DISABLED primary key
+      # :validated :: Filter by validation: true => only VALIDATED primary key, false => only NOT VALIDATED primary key
+		  #
+		  # Example:
+		  #
+		  #   DB.primary_key(:people)
+		  #   # { :person_id=>{
+		  #   #     :rely=>false,
+		  #   #     :enabled=>true,
+		  #   #     :validated=>true,
+		  #   #     :using_index=>:person_pk,
+		  #   #     :columns=>[:id]
+		  #   # } }
 	    def primary_key(table, options={})
 	    	result = table_constraints table, 'P', options
 				return unless result and not result.empty?
 				result.values.first.tap{|pk| pk[:name] = result.keys.first }
 	    end
 
-	    # Returns unique constraints defined on the given +table+ (or +schema.table+), as an array of hashes.
-	    #
-      # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
-      #   looks for all matching keys.
+		  # Return a hash containing unique constraint information for the table. Hash keys are constraint name symbols
+		  # and values are subhashes. Primary key constraints are _not_ returned by this method.
+		  # Options:
+		  # :enabled :: Filter by status: true => only ENABLED unique keys, false => only DISABLED unique keys
+		  # :validated :: Filter by validation: true => only VALIDATED unique keys, false => only NOT VALIDATED unique keys
+		  #
+		  # Example:
+		  #
+		  #   DB.unique_keys(:people)
+		  #   # { :person_ssn=>{
+		  #   #     :rely=>false,
+		  #   #     :enabled=>true,
+		  #   #     :validated=>true,
+		  #   #     :using_index=>:person_ssn_index,
+	    #   #     :columns=>[:ssn]
+		  #   #   },
+		  #   #   :person_dlnum=>{
+		  #   #     :rely=>true,
+		  #   #     :enabled=>false,
+		  #   #     :validated=>false,
+		  #   #     :using_index=>nil,
+	    #   #     :columns=>[:drivers_license_state, :drivers_license_number]
+		  #   # } }
 	    def unique_keys(table, options={})
 	    	table_constraints table, 'U', options
 	    end
 	    
-	    # Returns foreign keys defined on the given +table+ (or +schema.table+), as an array of hashes.
-	    #
-      # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
-      #   looks for all matching keys.
+		  # Return a hash containing foreign key information for the table. Hash keys are constraint name symbols
+		  # and values are subhashes.
+		  # Options:
+		  # :enabled :: Filter by status: true => only ENABLED foreign keys, false => only DISABLED foreign keys
+		  # :validated :: Filter by validation: true => only VALIDATED foreign keys, false => only NOT VALIDATED foreign keys
+		  #
+		  # Example:
+		  #
+		  #   DB.foreign_keys(:employees)
+		  #   # { :employee_manager_fk=>{
+		  #   #     :rely=>false,
+		  #   #     :enabled=>true,
+		  #   #     :validated=>true,
+		  #   #     :columns=>[:manager_id],
+	    #   #     :ref_constraint=>:manager_pk,
+	    #   #     :ref_table=>:managers
+		  #   #   },
+		  #   #   :employee_department_fk=>{
+		  #   #     :rely=>false,
+		  #   #     :enabled=>true,
+		  #   #     :validated=>true,
+		  #   #     :columns=>[:department_id],
+	    #   #     :ref_constraint=>:department_pk,
+	    #   #     :ref_table=>:departments
+		  #   # } }
 	    def foreign_keys(table, options={})
 	    	table_constraints table, 'R', options
 	    end
 	    
-	    # Returns foreign keys that refer to the given +table+ (or +schema.table+), as an array of hashes.
-	    #
-      # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
-      #   looks for all matching keys.
+		  # Return a hash containing foreign key information for keys that _refer_ to this table.  Hash keys are constraint name symbols
+		  # and values are subhashes.  Foreign keys for this table are _not_ returned by this method (unless they are self-referential).
+		  # Options:
+		  # :enabled :: Filter by status: true => only ENABLED foreign keys, false => only DISABLED foreign keys
+		  # :validated :: Filter by validation: true => only VALIDATED foreign keys, false => only NOT VALIDATED foreign keys
+		  #
+		  # Example:
+		  #
+		  #   DB.references(:employees)
+		  #   # { :assignment_employee_fk=>{
+		  #   #     :rely=>false,
+		  #   #     :enabled=>true,
+		  #   #     :validated=>true,
+		  #   #     :columns=>[:employee_id],
+		  #   #     :ref_constraint=>:employee_pk,
+		  #   #     :table=>:assignments
+		  #   #   },
+		  #   #   :bonus_recipient_fk=>{
+		  #   #     :rely=>false,
+		  #   #     :enabled=>true,
+		  #   #     :validated=>true,
+		  #   #     :columns=>[:recipient_id],
+		  #   #     :ref_constraint=>:employee_pk,
+		  #   #     :table=>:bonuses
+		  #   # } }
 	    def references(table, options={})
 	    	table_constraints table, 'R', options.merge(:table_name_column=>:t__table_name)
 	    end
