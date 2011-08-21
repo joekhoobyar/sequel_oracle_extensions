@@ -5,14 +5,13 @@ begin
   require 'jeweler'
   Jeweler::Tasks.new do |gem|
     gem.name = "sequel_oracle_extensions"
-    gem.summary = %Q{Oracle MERGE, optimizer hints, an schema extensions for Sequel}
+    gem.summary = %Q{Oracle MERGE, optimizer hints, and schema extensions for Sequel}
     gem.description = %Q{Oracle extensions for Sequel, including MERGE statements, optimizer hints, and schema extensions.}
     gem.email = "joe@ankhcraft.com"
     gem.homepage = "http://github.com/joekhoobyar/sequel_oracle_extensions"
     gem.authors = ["Joe Khoobyar"]
-    gem.add_dependency "sequel", ">= 3.10.0" 
+    gem.add_dependency "sequel", ">= 3.25.0" 
     gem.add_development_dependency "rspec", ">= 2.0.0"
-    # gem is a Gem::Specification... see http://www.rubygems.org/read/chapter/20 for additional settings
   end
   Jeweler::GemcutterTasks.new
 rescue LoadError

@@ -6,95 +6,95 @@ module Sequel
   module Oracle
     module DatabaseMethods
       
-	    # Returns the indexes for the given +table+ (or +schema.table+), as an array of hashes.
-			# By default, it does not return primary keys.
+      # Return a hash containing index information for the table. Hash keys are index name symbols
+      # and values are subhashes.  The superclass method specifies only two keys :columns and :unique.
+      # This extension provides additional keys in the subhash that expose Oracle-specific index attributes.
+      #
+			# By default, this method does not return the primary key index.
 	    #
       # * <tt>:valid</tt> - Only look for indexes that are valid (true) or unusable (false). By default (nil),
       #   looks for any matching index.
       # * <tt>:all</tt> - Returns all indexes, even ones used for primary keys.
-	    def indexes(qualified_table, options={})
+      #
+	    def indexes(table, opts={})
 	    	ds, result    = metadata_dataset, []
 				outm          = lambda{|k| ds.send :output_identifier, k}
-	    	schema, table = ds.schema_and_table(qualified_table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
+	    	schema, table = ds.schema_and_table(table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
 	    	
 	    	# Build the dataset and apply filters for introspection of indexes.
-	    	ds = ds.select(:i__index_name, :i__index_type, :i__join_index, :i__partitioned,
-	    	               :i__status, :i__uniqueness, :i__visibility, :i__compression, :i__tablespace_name,
-				               :ic__column_name).
+	    	ds = ds.select(:i__index_name, :i__index_type, :i__join_index, :i__partitioned, :i__status,
+	    	               :i__uniqueness, :i__visibility, :i__compression, :i__tablespace_name, :ic__column_name).
 				        from(:"all_indexes___i").
 				        join(:"all_ind_columns___ic", [ [:index_owner,:owner], [:index_name,:index_name] ]).
 								where(:i__table_name=>table, :i__dropped=>'NO').
 	              order(:status.desc, :index_name, :ic__column_position)
 				ds = ds.where :i__owner => schema unless schema.nil?
-				ds = ds.where :i__status => (options[:valid] ? 'VALID' : 'UNUSABLE') unless options[:valid].nil?
-				unless options[:all]
+				ds = ds.where :i__status => (opts[:valid] ? 'VALID' : 'UNUSABLE') unless opts[:valid].nil?
+				unless opts[:all]
 				  pk = from(:all_constraints.as(:c)).where(:c__constraint_type=>'P').
 					     where(:c__index_name=>:i__index_name, :c__owner=>:i__owner)
 					ds = ds.where ~pk.exists
 				end
 
-				# Return the table constraints as an array of hashes, including a column list.
-	      hash = Hash.new do |h,k|
-	      	result.push :index_name=>outm[k], :table_name=>outm[table], :columns=>[]
-	      	h[k] = result.last
-	      end
-        ds.each do |row|
-        	ref = hash[row[:index_name]]
-					ref[:index_type]        = row[:index_type]
-					ref[:join_index]        = row[:join_index]=='YES'
-        	ref[:partitioned]       = row[:partitioned]=='YES'
-        	ref[:valid]             = row[:status]=='VALID'
-        	ref[:uniqueness]        = row[:uniqueness]=='UNIQUE'
-        	ref[:visible]           = row[:visibility]=='VISIBLE'
-        	ref[:compression]       = row[:compression]!='DISABLED'
-        	ref[:tablespace]        = row[:tablespace_name]
-        	ref[:columns]           <<  outm[row[:column_name]]
-        end
-        result
+				# Return the indexes as a hash of subhashes, including a column list.
+				hash = {}
+				ds.each do |row|
+					key = :"#{outm[row[:index_name]]}"
+					unless subhash = hash[key]
+						subhash = hash[key] = {
+							:columns=>[], :unique=>(row[:uniqueness]=='UNIQUE'), :valid=>(row[:status]=='VALID'),
+							:db_type=>row[:index_type], :tablespace=>:"#{outm[row[:tablespace_name]]}",
+							:join_index=>(row[:join_index]=='YES'), :partitioned=>(row[:partitioned]=='YES'),
+							:visible=>(row[:visibility]=='VISIBLE'), :compression=>(row[:compression]!='DISABLED')
+						}
+					end
+					subhash[:columns] << :"#{outm[row[:column_name]]}"
+				end
+				hash
 	    end
 
 	    # Returns the primary key for the given +table+ (or +schema.table+), as a hash.
 	    #
       # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
       #   looks for any matching key.
-      # * <tt>:all</tt>     - Return an array of matching keys, instead of the first matching key.
       #
-	    def primary_key(qualified_table, options={})
-	    	result = table_constraints qualified_table, 'P', options
-				options[:all] ? result : result.first
+	    def primary_key(table, options={})
+	    	result = table_constraints table, 'P', options
+				return unless result and not result.empty?
+				result.values.first.tap{|pk| pk[:name] = result.keys.first }
 	    end
 
 	    # Returns unique constraints defined on the given +table+ (or +schema.table+), as an array of hashes.
 	    #
       # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
       #   looks for all matching keys.
-	    def unique_keys(qualified_table, options={})
-	    	table_constraints qualified_table, 'U', options
+	    def unique_keys(table, options={})
+	    	table_constraints table, 'U', options
 	    end
 	    
 	    # Returns foreign keys defined on the given +table+ (or +schema.table+), as an array of hashes.
 	    #
       # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
       #   looks for all matching keys.
-	    def foreign_keys(qualified_table, options={})
-	    	table_constraints qualified_table, 'R', options
+	    def foreign_keys(table, options={})
+	    	table_constraints table, 'R', options
 	    end
 	    
 	    # Returns foreign keys that refer to the given +table+ (or +schema.table+), as an array of hashes.
 	    #
       # * <tt>:enabled</tt> - Only look for keys that are enabled (true) or disabled (false). By default (nil),
       #   looks for all matching keys.
-	    def references(qualified_table, options={})
-	    	table_constraints qualified_table, 'R', options.merge(:table_name_column=>:t__table_name)
+	    def references(table, options={})
+	    	table_constraints table, 'R', options.merge(:table_name_column=>:t__table_name)
 	    end
 	    
 	  private
 	  	
 	  	# Internal helper method for introspection of table constraints.
-	  	def table_constraints(qualified_table, constraint_type, options={})
+	  	def table_constraints(table, constraint_type, options={})
 	    	ds, result    = metadata_dataset, []
 				outm          = lambda{|k| ds.send :output_identifier, k}
-	    	schema, table = ds.schema_and_table(qualified_table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
+	    	schema, table = ds.schema_and_table(table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
 	    	x_cons        = schema.nil? ? 'user_cons' : 'all_cons'
 	    	
 	    	# Build the dataset and apply filters for introspection of constraints.
@@ -113,30 +113,30 @@ module Sequel
 				else
 	        ds = ds.select_more(:c__index_name)
 				end
-				ds = yield ds, table if block_given?
+				ds = ds.limit(1) if constraint_type == 'P'
 				
-				# Return the table constraints as an array of hashes, including a column list.
-	      hash = Hash.new do |h,k|
-	      	result.push :constraint_name=>outm[k], :constraint_type=>constraint_type, :columns=>[]
-	      	h[k] = result.last
-	      end
-        ds.each do |row|
-        	ref = hash[row[:constraint_name]]
-        	ref[:table_name]        = outm[row[:table_name]]
-        	ref[:rely]              = row[:rely]=='RELY'
-        	ref[:enabled]           = row[:status]=='ENABLED'
-        	ref[:validated]         = row[:validated]=='VALIDATED'
-        	ref[:columns]           << outm[row[:column_name]]
-
-					if row.include? :r_constraint_name
-						ref[:r_constraint_name] = outm[row[:r_constraint_name]]
-						ref[:r_table_name]      = outm[row[:r_table_name]]
+				# Return the table constraints as a hash of subhashes, including a column list.
+				hash = {}
+				ds.each do |row|
+					key = :"#{outm[row[:constraint_name]]}"
+					unless subhash = hash[key]
+						subhash = hash[key] = {
+							:rely=>(row[:rely]=='RELY'), :enabled=>(row[:status]=='ENABLED'),
+							:validated=>(row[:validated]=='VALIDATED'), :columns=>[]
+						}
+						if row.include? :r_constraint_name
+							subhash[:ref_constraint] = :"#{outm[row[:r_constraint_name]]}"
+							if options[:table_name_column]==:t__table_name
+							then subhash[:table] = :"#{outm[row[:table_name]]}"
+							else subhash[:ref_table] = :"#{outm[row[:r_table_name]]}"
+							end
+						elsif row.include? :index_name
+							subhash[:using_index] = :"#{outm[row[:index_name]]}"
+						end
 					end
-					if row[:index_name]
-						ref[:index_name]        = outm[row[:index_name]]
-					end
-        end
-        result
+					subhash[:columns] << :"#{outm[row[:column_name]]}"
+				end
+				hash
 	  	end
     end
   end
