@@ -1,6 +1,11 @@
 ## MAC OS
 .DS_Store
 
+## ECLIPSE (DLTK Ruby)
+.buildpath
+.project
+.settings
+
 ## TEXTMATE
 *.tmproj
 tmtags
