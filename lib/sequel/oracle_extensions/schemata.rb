@@ -276,50 +276,65 @@ module Sequel
 	  	end
     end
 
+		# Methods that override existing functionality on Sequel::Oracle::Database.
+    module DatabaseExtensions
+
+    private
+          
+      # Implemented in order to override existing functionality on Sequel::Oracle::Database.
+      def self.append_features(base)
+        instance_methods(false).each do |k|
+          base.send :remove_method, k if base.instance_method(k).owner == base
+        end
+        super
+      end
+
+    public
+          
+      # Overridden to collect additional table-level information from the metadata.
+      #
+      # See Sequel::Oracle::Database#schema_parse_table for the original implementation.
+      def schema_parse_table(table, opts={})
+        ds = dataset
+        ds.identifier_output_method = :downcase
+        schema_and_table = "#{"#{quote_identifier(opts[:schema])}." if opts[:schema]}#{quote_identifier(table)}"
+        table_schema = []
+        metadata = transaction(opts){|conn| conn.describe_table(schema_and_table)}
+        metadata.columns.each do |column|
+          table_schema << [
+            column.name.downcase.to_sym,
+            {
+              :type => column.data_type,
+              :db_type => column.type_string.split(' ')[0],
+              :type_string => column.type_string,
+              :charset_form => column.charset_form,
+              :char_used => column.char_used?,
+              :char_size => column.char_size,
+              :data_size => column.data_size,
+              :precision => column.precision,
+              :scale => column.scale,
+              :fsprecision => column.fsprecision,
+              :lfprecision => column.lfprecision,
+              :allow_null => column.nullable?
+            }
+          ]
+        end
+        table_schema.instance_variable_set :@features, {
+          :owner => :"#{metadata.obj_schema.downcase}",
+          :clustered => (metadata.clustered? rescue nil),
+          :temporary => (metadata.is_temporary? rescue nil),
+          :partitioned => (metadata.is_temporary? rescue nil),
+          :typed => (metadata.is_typed? rescue nil),
+          :index_only => (metadata.index_only? rescue nil)
+        }
+        table_schema
+      end
+    end
   end
 end
 
 Sequel.require 'adapters/oracle' unless defined? ::Sequel::Oracle::Database
-
-# Methods that override existing functionality on Sequel::Oracle::Database.
 ::Sequel::Oracle::Database.class_eval do
-      
-  # Overridden to collect additional table-level information from the metadata.
-  #
-  # See Sequel::Oracle::Database#schema_parse_table for the original implementation.
-  def schema_parse_table(table, opts={})
-    ds = dataset
-    ds.identifier_output_method = :downcase
-    schema_and_table = "#{"#{quote_identifier(opts[:schema])}." if opts[:schema]}#{quote_identifier(table)}"
-    table_schema = []
-    metadata = transaction(opts){|conn| conn.describe_table(schema_and_table)}
-    metadata.columns.each do |column|
-      table_schema << [
-        column.name.downcase.to_sym,
-        {
-          :type => column.data_type,
-          :db_type => column.type_string.split(' ')[0],
-          :type_string => column.type_string,
-          :charset_form => column.charset_form,
-          :char_used => column.char_used?,
-          :char_size => column.char_size,
-          :data_size => column.data_size,
-          :precision => column.precision,
-          :scale => column.scale,
-          :fsprecision => column.fsprecision,
-          :lfprecision => column.lfprecision,
-          :allow_null => column.nullable?
-        }
-      ]
-    end
-    table_schema.instance_variable_set :@features, {
-      :owner => :"#{metadata.obj_schema.downcase}",
-      :clustered => (metadata.clustered? rescue nil),
-	    :temporary => (metadata.is_temporary? rescue nil),
-	    :partitioned => (metadata.is_temporary? rescue nil),
-	    :typed => (metadata.is_typed? rescue nil),
-	    :index_only => (metadata.index_only? rescue nil)
-    }
-    table_schema
-  end
+  #remove_method :schema_parse_table
+  include ::Sequel::Oracle::DatabaseExtensions
 end
