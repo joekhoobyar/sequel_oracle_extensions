@@ -22,7 +22,7 @@ module Sequel
       # :temporary :: is this a global temporary table?
       # :typed :: is this a ... typed table?  ( not sure what that means :-/ )
       #
-      def table(table,options={})
+      def table_metadata(table,options={})
 		    columns    = schema table, options
         attributes = columns.instance_eval{ remove_instance_variable :@features }
 		    attributes[:columns] = Hash[ columns ]
