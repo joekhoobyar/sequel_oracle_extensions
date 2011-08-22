@@ -286,10 +286,6 @@ module Sequel
 	      
 	  	# Internal helper method for introspection of table constraints.
 	  	def table_constraints(table, constraint_type, options={})
-	    end
-    
-	  	# Internal helper method for introspection of table constraints.
-	  	def table_constraints(table, constraint_type, options={})
 	    	ds, result    = metadata_dataset, []
 				outm          = lambda{|k| ds.send :output_identifier, k}
 	    	schema, table = ds.schema_and_table(table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
