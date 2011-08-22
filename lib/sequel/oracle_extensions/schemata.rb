@@ -261,11 +261,16 @@ module Sequel
 		      raise Error, "Join clauses are only supported for bitmap indexes" if index[:type]!=:bitmap
 		      sql << "FROM #{qualified_table_name},"
 		      sql << index_columns.map{|k| quote_identifier schema_and_table(k).first }.uniq.join(', ')
-		      sql << "WHERE #{filter_expr(index_join)}"
+		        
+		      # TODO: Document this short-hand syntax:    {:columns=>[:ref_table__ref_column], :join=>[:fk_column]}
+          if Array===index_join and index_join.length==index_columns.length and index_join.all?{|k| Symbol===k}
+            index_join = Hash[ index_join.map{|k| :"#{table_name}__#{k}" }.zip(index_columns) ]
+          end
+
+	        sql << "WHERE #{filter_expr(index_join)}"
 	      end
 	      
 	      # Index attributes and options.
-	      raise Error, "An index cannot be both LOCAL and GLOBAL" if index[:local] and index[:global]
 	      sql << 'LOCAL' if index[:local]
 	      sql << parallel_option_sql(index[:parallel])
 	      sql << (index[:logging] ? 'LOGGING' : 'NOLOGGING') if index.include? :logging
