@@ -225,7 +225,69 @@ module Sequel
 	    end
 
     private
-	  	
+
+		  # Overridden because Oracle has a 30 character maximum identifier length.
+		  def default_index_name(table_name, columns)
+		    schema, table = schema_and_table(table_name)
+		    ds = DB[:all_indexes].where(:table_name=>table,:dropped=>'NO')
+		    ds = ds.where :owner=>schema unless schema.nil?
+		    "#{table[0,25]}_ix%2.2d" % [ds.count + 1]
+		  end
+    
+	    # SQL DDL statement for creating an index for the table with the given name
+	    # and index specifications.
+	    def index_definition_sql(table_name, index)
+	      sql = ["CREATE"]
+
+	      # Basic index creation DDL.
+	      index_name = index[:name] || default_index_name(table_name, index[:columns])
+	      raise Error, "Partial indexes are not supported for this database" if index[:where]
+	      case index[:type]
+	      when :bitmap
+		      raise Error, "Bitmap indexes cannot be unique" if index[:unique]
+	        sql << 'BITMAP'
+	      when NilClass, :normal
+	        sql << 'UNIQUE' if index[:unique]
+	      else
+	        raise Error, "Index type #{index[:type].inspect} is not supported for this database"
+	      end
+	      qualified_table_name = quote_schema_table table_name
+	      sql << "INDEX #{quote_identifier(index_name)} ON #{qualified_table_name}"
+	      
+	      # Index columns and join indexes.
+        index_join, index_columns = *index.values_at(:join,:columns)
+	      sql << literal(index_columns)
+        if index_join
+		      raise Error, "Join clauses are only supported for bitmap indexes" if index[:type]!=:bitmap
+		      sql << "FROM #{qualified_table_name},"
+		      sql << index_columns.map{|k| quote_identifier schema_and_table(k).first }.uniq.join(', ')
+		      sql << "WHERE #{filter_expr(index_join)}"
+	      end
+	      
+	      # Index attributes and options.
+	      raise Error, "An index cannot be both LOCAL and GLOBAL" if index[:local] and index[:global]
+	      sql << 'LOCAL' if index[:local]
+	      sql << parallel_option_sql(index[:parallel])
+	      sql << (index[:logging] ? 'LOGGING' : 'NOLOGGING') if index.include? :logging
+	      sql << "TABLESPACE #{quote_identifier(index[:tablespace])}" if index[:tablespace]
+	      sql << index[:options] if String === index[:options]
+	      sql.join ' '
+	    end
+	    
+      # SQL DDL clause for specifying parallelism in a table or index.
+	    def parallel_option_sql(value)
+	      case value
+	      when TrueClass then ' PARALLEL'
+	      when FalseClass then ' NOPARALLEL'
+	      when NilClass
+	      else raise Error, "Unsupported or invalid :parellel option"
+	      end
+      end
+	      
+	  	# Internal helper method for introspection of table constraints.
+	  	def table_constraints(table, constraint_type, options={})
+	    end
+    
 	  	# Internal helper method for introspection of table constraints.
 	  	def table_constraints(table, constraint_type, options={})
 	    	ds, result    = metadata_dataset, []
