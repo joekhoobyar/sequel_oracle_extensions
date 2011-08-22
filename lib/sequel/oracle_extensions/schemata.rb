@@ -6,6 +6,9 @@ module Sequel
   module Oracle
     module DatabaseMethods
       
+      # Specifies index attributes which are considered implicit and, thus, do not require DDL clauses.
+      IMPLICIT_INDEX_ATTRIBUTES = { :parallel=>false, :compress=>false, :logging=>true, :visible=>true }
+      
       # Returns a hash containing expanded table metadata that exposes Oracle-specific table attributes.
       #
       # Basic Attributes:
@@ -45,7 +48,7 @@ module Sequel
       #   #     :tablespace=>:users,
       #   #     :partitioned=>false,
       #   #     :visible=>true,
-      #   #     :compression=>false,
+      #   #     :compress=>false,
       #   #     :columns=>[:gender]
       #   #   },
       #   #   :person_name=>{
@@ -55,7 +58,7 @@ module Sequel
       #   #     :tablespace=>:users,
       #   #     :partitioned=>false,
       #   #     :visible=>true,
-      #   #     :compression=>false,
+      #   #     :compress=>false,
       #   #     :columns=>[:last_name, :first_name]
       #   # } }
       #
@@ -68,52 +71,76 @@ module Sequel
       #   #     :tablespace=>:users,
       #   #     :partitioned=>false,
       #   #     :visible=>true,
-      #   #     :compression=>false,
+      #   #     :compress=>false,
       #   #     :columns=>[:id]
       #   #   },
       #   #   :employee_dept=>{
       #   #     :unique=>false,
       #   #     :valid=>true,
-      #   #     :db_type=>'BITMAP JOIN',
+      #   #     :db_type=>'BITMAP',
+      #   #     :type=>:bitmap,
+      #   #     :join=>[:dept_id],
       #   #     :tablespace=>:users,
       #   #     :partitioned=>false,
       #   #     :visible=>true,
-      #   #     :compression=>false,
-      #   #     :columns=>[:dept_id]
+      #   #     :compress=>false,
+      #   #     :columns=>[:departments__id]
       #   # } }
 	    def indexes(table, opts={})
 	    	ds, result    = metadata_dataset, []
 				outm          = lambda{|k| ds.send :output_identifier, k}
 	    	schema, table = ds.schema_and_table(table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
+	    	who           = schema.nil? ? 'user' : 'all'
 	    	
 	    	# Build the dataset and apply filters for introspection of indexes.
 	    	ds = ds.select(:i__index_name, :i__index_type, :i__join_index, :i__partitioned, :i__status,
-	    	               :i__uniqueness, :i__visibility, :i__compression, :i__tablespace_name, :ic__column_name).
-				        from(:"all_indexes___i").
-				        join(:"all_ind_columns___ic", [ [:index_owner,:owner], [:index_name,:index_name] ]).
+	    	               :i__uniqueness, :i__visibility, :i__compression, :i__tablespace_name,
+	    	               :i__logging, :i__degree, :i__instances, :ic__column_name).
+				        from(:"#{who}_indexes___i").
+				        join(:"#{who}_ind_columns___ic", [ [:index_name,:index_name] ]).
 								where(:i__table_name=>table, :i__dropped=>'NO').
 	              order(:status.desc, :index_name, :ic__column_position)
-				ds = ds.where :i__owner => schema unless schema.nil?
+				ds = ds.where :i__owner => schema, :c__index_owner => schema  unless schema.nil?
 				ds = ds.where :i__status => (opts[:valid] ? 'VALID' : 'UNUSABLE') unless opts[:valid].nil?
 				unless opts[:all]
-				  pk = from(:all_constraints.as(:c)).where(:c__constraint_type=>'P').
-					     where(:c__index_name=>:i__index_name, :c__owner=>:i__owner)
+				  pk = from(:"#{who}_constraints".as(:c)).where(:c__constraint_type=>'P').
+					     where(:c__index_name => :i__index_name)
+					pk = pk.where :c__owner => schema unless schema.nil?
 					ds = ds.where ~pk.exists
 				end
 
-				# Return the indexes as a hash of subhashes, including a column list.
-				hash = {}
+				# Collect the indexes as a hash of subhashes, including a column list.
+				# As a followup, collect any additional metadata about the indexes (such as bitmap join columns).
+				hash, join_indexes = {}, []
+				p ds.sql
 				ds.each do |row|
 					key = :"#{outm[row[:index_name]]}"
 					unless subhash = hash[key]
 						subhash = hash[key] = {
-							:columns=>[], :unique=>(row[:uniqueness]=='UNIQUE'), :valid=>(row[:status]=='VALID'),
-							:db_type=>"#{row[:index_type]}#{' JOIN' if row[:join_index]=='YES'}",
+							:columns=>[], :unique=>(row[:uniqueness]=='UNIQUE'), :logging=>(row[:logging]=='YES'),
+							:db_type=>row[:index_type], :valid=>(row[:status]=='VALID'),
+							:parallel=>(row[:degree]!='1' || row[:instances]!='1'),
 							:tablespace=>:"#{outm[row[:tablespace_name]]}", :partitioned=>(row[:partitioned]=='YES'),
-							:visible=>(row[:visibility]=='VISIBLE'), :compression=>(row[:compression]!='DISABLED')
+							:visible=>(row[:visibility]=='VISIBLE'), :compress=>(row[:compression]!='DISABLED')
 						}
+						case subhash[:db_type]; when 'BITMAP','NORMAL'
+						  subhash[:type] = :"#{subhash[:db_type].downcase}"
+						end
+				    if row[:join_index]=='YES'
+						  join_indexes << row[:index_name]
+						  subhash[:join] = []
+				    end
 					end
 					subhash[:columns] << :"#{outm[row[:column_name]]}"
+				end
+				ds = metadata_dataset.from(:"#{who}_join_ind_columns").where(:index_name=>join_indexes)
+				ds = ds.where :index_owner => schema unless schema.nil?
+				ds.each do |row|
+					subhash    = hash[:"#{outm[row[:index_name]]}"]
+					ref_column = :"#{outm[row[:outer_table_column]]}"
+					pos        = subhash[:columns].index ref_column
+					subhash[:columns][pos] = :"#{outm[row[:outer_table_name]]}__#{ref_column}"
+					subhash[:join][pos]    = :"#{outm[row[:inner_table_column]]}"
 				end
 				hash
 	    end
@@ -237,11 +264,10 @@ module Sequel
 	    # SQL DDL statement for creating an index for the table with the given name
 	    # and index specifications.
 	    def index_definition_sql(table_name, index)
-	      sql = ["CREATE"]
+	      raise Error, "Partial indexes are not supported for this database" if index[:where]
 
 	      # Basic index creation DDL.
-	      index_name = index[:name] || default_index_name(table_name, index[:columns])
-	      raise Error, "Partial indexes are not supported for this database" if index[:where]
+	      sql = ["CREATE"]
 	      case index[:type]
 	      when :bitmap
 		      raise Error, "Bitmap indexes cannot be unique" if index[:unique]
@@ -251,6 +277,7 @@ module Sequel
 	      else
 	        raise Error, "Index type #{index[:type].inspect} is not supported for this database"
 	      end
+	      index_name = index[:name] || default_index_name(table_name, index[:columns])
 	      qualified_table_name = quote_schema_table table_name
 	      sql << "INDEX #{quote_identifier(index_name)} ON #{qualified_table_name}"
 	      
@@ -271,21 +298,32 @@ module Sequel
 	      end
 	      
 	      # Index attributes and options.
-	      sql << 'LOCAL' if index[:local]
-	      sql << parallel_option_sql(index[:parallel])
-	      sql << (index[:logging] ? 'LOGGING' : 'NOLOGGING') if index.include? :logging
+	      sql << 'LOCAL' if index[:partitioned]
+	      sql << flag_option_sql(index, :parallel)
+	      sql << flag_option_sql(index, :logging)
 	      sql << "TABLESPACE #{quote_identifier(index[:tablespace])}" if index[:tablespace]
+	      sql << flag_option_sql(index, :visible, 'INVISIBLE')
+	      sql << compress_option_sql(index)
 	      sql << index[:options] if String === index[:options]
-	      sql.join ' '
+	      sql << 'UNUSABLE' if FalseClass === index[:valid]
+	      sql.compact.join ' '
 	    end
 	    
-      # SQL DDL clause for specifying parallelism in a table or index.
-	    def parallel_option_sql(value)
-	      case value
-	      when TrueClass then ' PARALLEL'
-	      when FalseClass then ' NOPARALLEL'
-	      when NilClass
-	      else raise Error, "Unsupported or invalid :parellel option"
+      # SQL DDL clause for specifying on/off flags
+	    def flag_option_sql(attrs, key, off="NO#{key}".upcase, on=key.to_s.upcase, implicit=IMPLICIT_INDEX_ATTRIBUTES[key])
+	      case attrs[key]
+	      when NilClass, implicit
+	      when TrueClass then on
+	      when FalseClass then off
+	      else raise Error, "Unsupported or invalid #{key} option"
+	      end
+	    end
+	    
+      # SQL DDL clause for specifying compression in a table or index.
+	    def compress_option_sql(attrs)
+	      case value=attrs[:compress]
+	      when Fixnum, Integer then "COMPRESS(#{value})"
+	      else flag_option_sql attrs, :compress
 	      end
       end
 	      
