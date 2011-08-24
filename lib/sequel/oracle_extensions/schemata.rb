@@ -29,6 +29,26 @@ module Sequel
 		    columns    = schema table, options
         attributes = columns.instance_eval{ remove_instance_variable :@features }
 		    attributes[:columns] = Hash[ columns ]
+		    
+		    # Collect table partitioning information, if applicable.
+		    if attributes[:partitioning]
+		    	ds, result    = metadata_dataset, []
+					outm          = sql_ident_to_sym_proc ds
+	    	  schema, table = ds.schema_and_table(table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
+          who           = schema.nil? ? 'user' : 'all'
+					ds = ds.where :owner => schema unless schema.nil?
+					
+					# Basic partitioning info.
+					attributes[:partitioning] = ds.
+		    	    select(:partitioning_type.as(:type), :interval, :subpartitioning_type.as(:subtype)).
+		    	    from(:"#{who}_part_tables").where(:table_name=>table).first
+		    	
+		    	# Partitioning key column info. 
+					attributes[:partitioning][:key] = ds.
+		    	    select(:column_name).from(:"#{who}_part_key_columns").order(:column_position).
+		    	    where(:object_type=>'TABLE', :name=>table).map{|r| r.values.flatten }
+				end
+	    	    
 		    attributes
       end
       
@@ -256,6 +276,19 @@ module Sequel
 	    	table_constraints table, 'R', options.merge(:table_name_column=>:t__table_name)
 	    end
 
+      # Overridden to support various Oracle-specific options.
+      def alter_table(name, generator=nil, options=nil, &block)
+        if Hash === options
+          generator ||= Schema::AlterTableGenerator.new(self, &block)
+		      alter_table_sql_list(name, generator.operations, options).
+		        flatten.each {|sql| execute_ddl(sql)}
+		      remove_cached_schema(name)
+		      nil
+        else
+	        super(name, generator, &block)
+        end
+      end
+
     protected
 
       # Type-safe (and nil safe) conversion for SQL identifers to Ruby symbols.
@@ -273,12 +306,25 @@ module Sequel
 
       # Overridden because Oracle has slightly different syntax.
       def alter_table_sql(table, op)
-        alter_table_op =
-          case op[:op]
-	        when :add_column  then "ADD #{column_definition_sql(op)}"
-	        else              return super(table, op)
-	        end
-        "ALTER TABLE #{quote_schema_table(table)} #{alter_table_op}"
+	      case op[:op]
+        when :add_column
+          "ALTER TABLE #{quote_schema_table(table)} ADD #{column_definition_sql(op)}"
+        else
+          return super(table, op)
+        end
+	    end
+	    
+      # Overridden to support various Oracle-specific options.
+	    def alter_table_sql_list(table, operations, options=nil)
+	      return super(table, operations) unless Hash===options
+	      
+	      prologue = "ALTER TABLE #{quote_schema_table(table)} "
+	      sql      = operations.map do |op|
+	        frag = alter_table_sql table, op
+	        raise ArgumentError unless frag.slice![0,prologue.length] == prologue
+	        frag
+	      end
+	      sql.push(table_options_sql(options)).join ' '
       end
 
       # Overridden to support various Oracle-specific options.
@@ -289,6 +335,12 @@ module Sequel
 	      sql << flag_option_sql(options, :validate)
 	      sql.join ' '
       end
+	
+	    # Overridden to support various Oracle-specific options.
+	    def create_table_sql(name, generator, options)
+        a, b = super(name, generator, options), table_options_sql(options)
+        "#{a}\n#{b}"
+	    end
 
 		  # Overridden because Oracle has a 30 character maximum identifier length.
 		  def default_index_name(table_name, columns)
@@ -343,6 +395,18 @@ module Sequel
 	      sql << compress_option_sql(index)
 	      sql << index[:options] if String === index[:options]
 	      sql << 'UNUSABLE' if FalseClass === index[:valid]
+	      sql.compact.join ' '
+	    end
+	    
+      # SQL DDL clauses for altering and/or creating tables.
+	    def table_options_sql(options)
+	      sql = []
+	      sql << flag_option_sql(options, :parallel)
+	      sql << flag_option_sql(options, :logging)
+	      sql << flag_option_sql(options, :monitoring)
+	      sql << "TABLESPACE #{quote_identifier(options[:tablespace])}" if options[:tablespace]
+	      sql << compress_option_sql(options)
+	      sql << options[:options] if String === options[:options]
 	      sql.compact.join ' '
 	    end
 	    
@@ -458,12 +522,12 @@ module Sequel
           ]
         end
         table_schema.instance_variable_set :@features, {
-          :owner => :"#{metadata.obj_schema.downcase}",
-          :clustered => (metadata.clustered? rescue nil),
-          :temporary => (metadata.is_temporary? rescue nil),
-          :partitioned => (metadata.is_temporary? rescue nil),
-          :typed => (metadata.is_typed? rescue nil),
-          :index_only => (metadata.index_only? rescue nil)
+          :owner         => :"#{metadata.obj_schema.downcase}",
+          :clustered     => (metadata.clustered? rescue nil),
+          :temporary     => (metadata.is_temporary? rescue nil),
+          :partitioning  => (metadata.partitioned? rescue nil),
+          :typed         => (metadata.is_typed? rescue nil),
+          :index_only    => (metadata.index_only? rescue nil)
         }
         table_schema
       end
