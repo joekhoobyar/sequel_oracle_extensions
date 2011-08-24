@@ -253,6 +253,17 @@ module Sequel
 
     private
 
+			# Overridden because Oracle has slightly different syntax.
+			def alter_table_sql(table, op)
+			  alter_table_op = case op[:op]
+			  when :add_column
+			    "ADD #{column_definition_sql(op)}"
+			  else
+			    return super(table, op)
+			  end
+			  "ALTER TABLE #{quote_schema_table(table)} #{alter_table_op}"
+			end
+
 		  # Overridden because Oracle has a 30 character maximum identifier length.
 		  def default_index_name(table_name, columns)
 		    schema, table = schema_and_table(table_name)
