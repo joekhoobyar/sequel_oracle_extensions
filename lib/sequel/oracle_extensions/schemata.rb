@@ -116,15 +116,18 @@ module Sequel
 					key = outm[row[:index_name]]
 					unless subhash = hash[key]
 						subhash = hash[key] = {
-							:columns=>[], :unique=>(row[:uniqueness]=='UNIQUE'), :logging=>(row[:logging]=='YES'),
-							:db_type=>row[:index_type], :valid=>(row[:status]=='VALID'),
+							:columns=>[], :unique=>(row[:uniqueness]=='UNIQUE'),
+							:db_type=>row[:index_type], :logging=>(row[:logging]=='YES'),
 							:parallel=>(row[:degree]!='1' || row[:instances]!='1'),
 							:tablespace=>outm[row[:tablespace_name]], :partitioned=>(row[:partitioned]=='YES'),
 							:visible=>(row[:visibility]=='VISIBLE'), :compress=>(row[:compression]!='DISABLED')
 						}
-						case subhash[:db_type]; when 'BITMAP','NORMAL'
-						  subhash[:type] = :"#{subhash[:db_type].downcase}"
+						case subhash[:db_type]
+            when /\b(BITMAP|NORMAL|DOMAIN)$/
+						  subhash[:type] = $1.downcase.intern
 						end
+            subhash[:function_based] = true if /^FUNCTION-BASED\b/ === subhash[:db_type]
+            subhash[:valid] = (row[:status]=='VALID') unless row[:status]=='N/A'
 				    if row[:join_index]=='YES'
 						  join_indexes << row[:index_name]
 						  subhash[:join] = []
