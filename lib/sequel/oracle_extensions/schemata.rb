@@ -6,8 +6,11 @@ module Sequel
   module Oracle
     module DatabaseMethods
       
-      # Specifies index attributes which are considered implicit and, thus, do not require DDL clauses.
-      IMPLICIT_INDEX_ATTRIBUTES = { :parallel=>false, :compress=>false, :logging=>true, :visible=>true }
+      # Specifies flag attributes which are considered implicit and, thus, do not require DDL clauses.
+      IMPLICIT_FLAG_ATTRIBUTES = {
+        :parallel=>false, :compress=>false, :logging=>true, :visible=>true,
+        :rely=>false, :enabled=>true, :validate=>true
+      }
       
       # Returns a hash containing expanded table metadata that exposes Oracle-specific table attributes.
       #
@@ -268,16 +271,24 @@ module Sequel
 
     private
 
-			# Overridden because Oracle has slightly different syntax.
-			def alter_table_sql(table, op)
-			  alter_table_op = case op[:op]
-			  when :add_column
-			    "ADD #{column_definition_sql(op)}"
-			  else
-			    return super(table, op)
-			  end
-			  "ALTER TABLE #{quote_schema_table(table)} #{alter_table_op}"
-			end
+      # Overridden because Oracle has slightly different syntax.
+      def alter_table_sql(table, op)
+        alter_table_op =
+          case op[:op]
+	        when :add_column  then "ADD #{column_definition_sql(op)}"
+	        else              return super(table, op)
+	        end
+        "ALTER TABLE #{quote_schema_table(table)} #{alter_table_op}"
+      end
+
+      # Overridden to support various Oracle-specific options.
+      def column_references_sql(options)
+        sql = [super(options)]
+	      sql << flag_option_sql(options, :rely)
+	      sql << flag_option_sql(options, :enable, 'DISABLE')
+	      sql << flag_option_sql(options, :validate)
+	      sql.join ' '
+      end
 
 		  # Overridden because Oracle has a 30 character maximum identifier length.
 		  def default_index_name(table_name, columns)
@@ -336,7 +347,7 @@ module Sequel
 	    end
 	    
       # SQL DDL clause for specifying on/off flags
-	    def flag_option_sql(attrs, key, off="NO#{key}".upcase, on=key.to_s.upcase, implicit=IMPLICIT_INDEX_ATTRIBUTES[key])
+	    def flag_option_sql(attrs, key, off="NO#{key}".upcase, on=key.to_s.upcase, implicit=IMPLICIT_FLAG_ATTRIBUTES[key])
 	      case attrs[key]
 	      when NilClass, implicit
 	      when TrueClass then on
@@ -384,8 +395,8 @@ module Sequel
 					key = outm[row[:constraint_name]]
 					unless subhash = hash[key]
 						subhash = hash[key] = {
-							:rely=>(row[:rely]=='RELY'), :enabled=>(row[:status]=='ENABLED'),
-							:validated=>(row[:validated]=='VALIDATED'), :columns=>[]
+							:rely=>(row[:rely]=='RELY'), :enable=>(row[:status]=='ENABLED'),
+							:validate=>(row[:validated]=='VALIDATED'), :columns=>[]
 						}
 						if row.include? :r_constraint_name
 							subhash[:ref_constraint] = outm[row[:r_constraint_name]]
