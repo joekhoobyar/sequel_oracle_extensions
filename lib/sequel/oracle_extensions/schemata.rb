@@ -88,7 +88,7 @@ module Sequel
       #   # } }
 	    def indexes(table, opts={})
 	    	ds, result    = metadata_dataset, []
-				outm          = lambda{|k| ds.send :output_identifier, k}
+				outm          = sql_ident_to_sym_proc ds
 	    	schema, table = ds.schema_and_table(table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
 	    	who           = schema.nil? ? 'user' : 'all'
 	    	
@@ -114,13 +114,13 @@ module Sequel
 				hash, join_indexes = {}, []
 				p ds.sql
 				ds.each do |row|
-					key = :"#{outm[row[:index_name]]}"
+					key = outm[row[:index_name]]
 					unless subhash = hash[key]
 						subhash = hash[key] = {
 							:columns=>[], :unique=>(row[:uniqueness]=='UNIQUE'), :logging=>(row[:logging]=='YES'),
 							:db_type=>row[:index_type], :valid=>(row[:status]=='VALID'),
 							:parallel=>(row[:degree]!='1' || row[:instances]!='1'),
-							:tablespace=>:"#{outm[row[:tablespace_name]]}", :partitioned=>(row[:partitioned]=='YES'),
+							:tablespace=>outm[row[:tablespace_name]], :partitioned=>(row[:partitioned]=='YES'),
 							:visible=>(row[:visibility]=='VISIBLE'), :compress=>(row[:compression]!='DISABLED')
 						}
 						case subhash[:db_type]; when 'BITMAP','NORMAL'
@@ -131,16 +131,16 @@ module Sequel
 						  subhash[:join] = []
 				    end
 					end
-					subhash[:columns] << :"#{outm[row[:column_name]]}"
+					subhash[:columns] << outm[row[:column_name]]
 				end
 				ds = metadata_dataset.from(:"#{who}_join_ind_columns").where(:index_name=>join_indexes)
 				ds = ds.where :index_owner => schema unless schema.nil?
 				ds.each do |row|
-					subhash    = hash[:"#{outm[row[:index_name]]}"]
-					ref_column = :"#{outm[row[:outer_table_column]]}"
+					subhash    = hash[outm[row[:index_name]]]
+					ref_column = outm[row[:outer_table_column]]
 					pos        = subhash[:columns].index ref_column
-					subhash[:columns][pos] = :"#{outm[row[:outer_table_name]]}__#{ref_column}"
-					subhash[:join][pos]    = :"#{outm[row[:inner_table_column]]}"
+					subhash[:columns][pos] = outm["#{row[:outer_table_name]}__#{ref_column}"]
+					subhash[:join][pos]    = outm[row[:inner_table_column]]
 				end
 				hash
 	    end
@@ -251,6 +251,19 @@ module Sequel
 	    	table_constraints table, 'R', options.merge(:table_name_column=>:t__table_name)
 	    end
 
+    protected
+
+      # Type-safe (and nil safe) conversion for SQL identifers to Ruby symbols.
+      # Returns a proc that converts String types and passes through all other types
+      def sql_ident_to_sym_proc(dataset)
+        lambda do |k|
+          unless String===k then k else
+            k = dataset.send :output_identifier, k
+            String===k ? k.intern : k
+          end
+        end
+      end
+
     private
 
 			# Overridden because Oracle has slightly different syntax.
@@ -341,7 +354,7 @@ module Sequel
 	  	# Internal helper method for introspection of table constraints.
 	  	def table_constraints(table, constraint_type, options={})
 	    	ds, result    = metadata_dataset, []
-				outm          = lambda{|k| ds.send :output_identifier, k}
+				outm          = sql_ident_to_sym_proc ds
 	    	schema, table = ds.schema_and_table(table).map{|k| k.to_s.send(ds.identifier_input_method) if k} 
 	    	x_cons        = schema.nil? ? 'user_cons' : 'all_cons'
 	    	
@@ -366,23 +379,23 @@ module Sequel
 				# Return the table constraints as a hash of subhashes, including a column list.
 				hash = {}
 				ds.each do |row|
-					key = :"#{outm[row[:constraint_name]]}"
+					key = outm[row[:constraint_name]]
 					unless subhash = hash[key]
 						subhash = hash[key] = {
 							:rely=>(row[:rely]=='RELY'), :enabled=>(row[:status]=='ENABLED'),
 							:validated=>(row[:validated]=='VALIDATED'), :columns=>[]
 						}
 						if row.include? :r_constraint_name
-							subhash[:ref_constraint] = :"#{outm[row[:r_constraint_name]]}"
+							subhash[:ref_constraint] = outm[row[:r_constraint_name]]
 							if options[:table_name_column]==:t__table_name
-							then subhash[:table] = :"#{outm[row[:table_name]]}"
-							else subhash[:ref_table] = :"#{outm[row[:r_table_name]]}"
+							then subhash[:table] = outm[row[:table_name]]
+							else subhash[:ref_table] = outm[row[:r_table_name]]
 							end
 						elsif row.include? :index_name
-							subhash[:using_index] = :"#{outm[row[:index_name]]}"
+							subhash[:using_index] = outm[row[:index_name]]
 						end
 					end
-					subhash[:columns] << :"#{outm[row[:column_name]]}"
+					subhash[:columns] << outm[row[:column_name]]
 				end
 				hash
 	  	end
