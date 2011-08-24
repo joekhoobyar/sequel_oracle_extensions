@@ -112,7 +112,6 @@ module Sequel
 				# Collect the indexes as a hash of subhashes, including a column list.
 				# As a followup, collect any additional metadata about the indexes (such as bitmap join columns).
 				hash, join_indexes = {}, []
-				p ds.sql
 				ds.each do |row|
 					key = outm[row[:index_name]]
 					unless subhash = hash[key]
