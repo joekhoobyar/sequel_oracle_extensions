@@ -9,7 +9,7 @@ Gem::Specification.new do |s|
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Joe Khoobyar"]
-  s.date = %q{2011-08-21}
+  s.date = %q{2011-08-24}
   s.description = %q{Oracle extensions for Sequel, including MERGE statements, optimizer hints, and schema extensions.}
   s.email = %q{joe@ankhcraft.com}
   s.extra_rdoc_files = [
