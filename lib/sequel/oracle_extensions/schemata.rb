@@ -28,7 +28,7 @@ module Sequel
       def table_metadata(table,options={})
 		    columns    = schema table, options
         attributes = columns.instance_eval{ remove_instance_variable :@features }
-		    attributes[:columns] = Hash[ columns ]
+		    attributes[:columns] = columns
 		    
 		    # Collect table partitioning information, if applicable.
 		    if attributes[:partitioning]
@@ -39,14 +39,16 @@ module Sequel
 					ds = ds.where :owner => schema unless schema.nil?
 					
 					# Basic partitioning info.
-					attributes[:partitioning] = ds.
-		    	    select(:partitioning_type.as(:type), :interval, :subpartitioning_type.as(:subtype)).
-		    	    from(:"#{who}_part_tables").where(:table_name=>table).first
+					attributes[:partitioning] = Hash[
+						ds.select(:partitioning_type.as(:type), :interval, :subpartitioning_type.as(:subtype)).
+		    	    from(:"#{who}_part_tables").first(:table_name=>table).
+		    	    map{|k,v| [k, k==:interval ? v : v.downcase.to_sym] }
+			   	]
 		    	
 		    	# Partitioning key column info. 
-					attributes[:partitioning][:key] = ds.
-		    	    select(:column_name).from(:"#{who}_part_key_columns").order(:column_position).
-		    	    where(:object_type=>'TABLE', :name=>table).map{|r| r.values.flatten }
+					attributes[:partitioning][:key] =
+						ds.select(:column_name).from(:"#{who}_part_key_columns").order(:column_position).
+		    	    where(:object_type=>'TABLE', :name=>table).map{|r| outm[r.values.first] }
 				end
 	    	    
 		    attributes
