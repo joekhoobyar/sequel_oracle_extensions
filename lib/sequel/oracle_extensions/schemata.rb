@@ -128,18 +128,15 @@ module Sequel
 				ds = ds.where :i__owner => schema, :c__index_owner => schema  unless schema.nil?
 				ds = ds.where :i__status => (opts[:valid] ? 'VALID' : 'UNUSABLE') unless opts[:valid].nil?
 				unless opts[:all]
-				  pk = from(:"#{who}_constraints".as(:c)).where(:c__constraint_type=>'P').
-					     where(:c__index_name => :i__index_name)
-					pk = pk.where :c__owner => schema unless schema.nil?
-					ds = ds.where ~pk.exists
+				  pk_cols = primary_key(table) and pk_cols = pk_cols[:columns]
 				end
 
 				# Collect the indexes as a hash of subhashes, including a column list.
-				# As a followup, collect any additional metadata about the indexes (such as bitmap join columns).
 				hash, join_indexes = {}, []
 				ds.each do |row|
 					key = outm[row[:index_name]]
 					unless subhash = hash[key]
+						# Unconditional attributes
 						subhash = hash[key] = {
 							:columns=>[], :unique=>(row[:uniqueness]=='UNIQUE'),
 							:db_type=>row[:index_type], :logging=>(row[:logging]=='YES'),
@@ -147,19 +144,20 @@ module Sequel
 							:tablespace=>outm[row[:tablespace_name]], :partitioned=>(row[:partitioned]=='YES'),
 							:visible=>(row[:visibility]=='VISIBLE'), :compress=>(row[:compression]!='DISABLED')
 						}
-						case subhash[:db_type]
-            when /\b(BITMAP|NORMAL|DOMAIN)$/
-						  subhash[:type] = $1.downcase.intern
-						end
+						
+						# Conditional attributes
+						subhash[:type] = $1.downcase.intern if subhash[:db_type] =~ /\b(BITMAP|NORMAL|DOMAIN)$/i
             subhash[:function_based] = true if /^FUNCTION-BASED\b/ === subhash[:db_type]
             subhash[:valid] = (row[:status]=='VALID') unless row[:status]=='N/A'
-				    if row[:join_index]=='YES'
-						  join_indexes << row[:index_name]
-						  subhash[:join] = []
-				    end
+						join_indexes << row[:index_name] and subhash[:join] = [] if row[:join_index]=='YES'
 					end
 					subhash[:columns] << outm[row[:column_name]]
 				end
+				
+				# Exclude the primary key index, if required.
+				hash.reject!{|k,v| v[:columns] == pk_cols } unless opts[:all]
+				
+				# Collect any additional metadata about the indexes (such as bitmap join columns).
 				ds = metadata_dataset.from(:"#{who}_join_ind_columns").where(:index_name=>join_indexes)
 				ds = ds.where :index_owner => schema unless schema.nil?
 				ds.each do |row|
@@ -169,6 +167,8 @@ module Sequel
 					subhash[:columns][pos] = outm["#{row[:outer_table_name]}__#{ref_column}"]
 					subhash[:join][pos]    = outm[row[:inner_table_column]]
 				end
+				
+				# Done.
 				hash
 	    end
 
@@ -446,6 +446,7 @@ module Sequel
 	              order(:table_name, :status.desc, :constraint_name, :cc__position)
 				ds = ds.where :c__owner => schema unless schema.nil?
 				ds = ds.where :c__status => (options[:enabled] ? 'ENABLED' : 'DISABLED') unless options[:enabled].nil?
+				ds = ds.where :c__validated => (options[:validated] ? 'VALIDATED' : 'NOT VALIDATED') unless options[:validated].nil?
 				if constraint_type == 'R'
 	        ds = ds.select_more(:c__r_constraint_name, :t__table_name.as(:r_table_name)).
 					        join(:"#{x_cons}traints___t", [ [:owner,:c__r_owner], [:constraint_name,:c__r_constraint_name] ]).
