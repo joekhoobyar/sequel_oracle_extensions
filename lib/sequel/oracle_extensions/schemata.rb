@@ -456,7 +456,6 @@ module Sequel
 				else
 	        ds = ds.select_more(:c__index_name)
 				end
-				ds = ds.limit(1) if constraint_type == 'P'
 				
 				# Return the table constraints as a hash of subhashes, including a column list.
 				hash = {}
