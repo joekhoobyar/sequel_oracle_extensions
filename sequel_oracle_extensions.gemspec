@@ -8,8 +8,8 @@ Gem::Specification.new do |s|
   s.version = "0.6.5"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
-  s.authors = ["Joe Khoobyar"]
-  s.date = %q{2011-08-24}
+  s.authors = [%q{Joe Khoobyar}]
+  s.date = %q{2011-08-26}
   s.description = %q{Oracle extensions for Sequel, including MERGE statements, optimizer hints, and schema extensions.}
   s.email = %q{joe@ankhcraft.com}
   s.extra_rdoc_files = [
@@ -34,14 +34,9 @@ Gem::Specification.new do |s|
     "spec/spec_helper.rb"
   ]
   s.homepage = %q{http://github.com/joekhoobyar/sequel_oracle_extensions}
-  s.require_paths = ["lib"]
-  s.rubygems_version = %q{1.7.2}
+  s.require_paths = [%q{lib}]
+  s.rubygems_version = %q{1.8.8}
   s.summary = %q{Oracle MERGE, optimizer hints, and schema extensions for Sequel}
-  s.test_files = [
-    "spec/sequel/oracle_extensions/hints_spec.rb",
-    "spec/sequel/oracle_extensions/merge_spec.rb",
-    "spec/spec_helper.rb"
-  ]
 
   if s.respond_to? :specification_version then
     s.specification_version = 3
