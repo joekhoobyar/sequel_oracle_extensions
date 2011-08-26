@@ -127,9 +127,6 @@ module Sequel
 	              order(:status.desc, :index_name, :ic__column_position)
 				ds = ds.where :i__owner => schema, :c__index_owner => schema  unless schema.nil?
 				ds = ds.where :i__status => (opts[:valid] ? 'VALID' : 'UNUSABLE') unless opts[:valid].nil?
-				unless opts[:all]
-				  pk_cols = primary_key(table) and pk_cols = pk_cols[:columns]
-				end
 
 				# Collect the indexes as a hash of subhashes, including a column list.
 				hash, join_indexes = {}, []
@@ -154,8 +151,13 @@ module Sequel
 					subhash[:columns] << outm[row[:column_name]]
 				end
 				
-				# Exclude the primary key index, if required.
-				hash.reject!{|k,v| v[:columns] == pk_cols } unless opts[:all]
+				# Exclude the primary key index, if required and applicable.
+				# NOTE:  Disabled primary keys do not use any indexes, so they are not applicable here.
+				if ! opts[:all] and pk = primary_key(table)
+					if pk[:using_index]  then hash.delete pk[:using_index]
+					elsif pk[:enabled]   then hash.delete_if {|k,v| v[:columns]==pk[:columns] }
+					end					
+				end
 				
 				# Collect any additional metadata about the indexes (such as bitmap join columns).
 				ds = metadata_dataset.from(:"#{who}_join_ind_columns").where(:index_name=>join_indexes)
