@@ -160,14 +160,16 @@ module Sequel
 				end
 				
 				# Collect any additional metadata about the indexes (such as bitmap join columns).
-				ds = metadata_dataset.from(:"#{who}_join_ind_columns").where(:index_name=>join_indexes)
-				ds = ds.where :index_owner => schema unless schema.nil?
-				ds.each do |row|
-					subhash    = hash[outm[row[:index_name]]]
-					ref_column = outm[row[:outer_table_column]]
-					pos        = subhash[:columns].index ref_column
-					subhash[:columns][pos] = outm["#{row[:outer_table_name]}__#{ref_column}"]
-					subhash[:join][pos]    = outm[row[:inner_table_column]]
+				unless join_indexes.empty?
+					ds = metadata_dataset.from(:"#{who}_join_ind_columns").where(:index_name=>join_indexes)
+					ds = ds.where :index_owner => schema unless schema.nil?
+					ds.each do |row|
+						subhash    = hash[outm[row[:index_name]]]
+						ref_column = outm[row[:outer_table_column]]
+						pos        = subhash[:columns].index ref_column
+						subhash[:columns][pos] = outm["#{row[:outer_table_name]}__#{ref_column}"]
+						subhash[:join][pos]    = outm[row[:inner_table_column]]
+					end
 				end
 				
 				# Done.
