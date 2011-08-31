@@ -4,14 +4,14 @@
 # -*- encoding: utf-8 -*-
 
 Gem::Specification.new do |s|
-  s.name = %q{sequel_oracle_extensions}
-  s.version = "0.6.5"
+  s.name = "sequel_oracle_extensions"
+  s.version = "0.6.6"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
-  s.authors = [%q{Joe Khoobyar}]
-  s.date = %q{2011-08-26}
-  s.description = %q{Oracle extensions for Sequel, including MERGE statements, optimizer hints, and schema extensions.}
-  s.email = %q{joe@ankhcraft.com}
+  s.authors = ["Joe Khoobyar"]
+  s.date = "2011-08-31"
+  s.description = "Oracle extensions for Sequel, including MERGE statements, optimizer hints, and schema extensions."
+  s.email = "joe@ankhcraft.com"
   s.extra_rdoc_files = [
     "LICENSE",
     "README.rdoc"
@@ -33,10 +33,10 @@ Gem::Specification.new do |s|
     "spec/sequel/oracle_extensions/merge_spec.rb",
     "spec/spec_helper.rb"
   ]
-  s.homepage = %q{http://github.com/joekhoobyar/sequel_oracle_extensions}
-  s.require_paths = [%q{lib}]
-  s.rubygems_version = %q{1.8.8}
-  s.summary = %q{Oracle MERGE, optimizer hints, and schema extensions for Sequel}
+  s.homepage = "http://github.com/joekhoobyar/sequel_oracle_extensions"
+  s.require_paths = ["lib"]
+  s.rubygems_version = "1.8.10"
+  s.summary = "Oracle MERGE, optimizer hints, and schema extensions for Sequel"
 
   if s.respond_to? :specification_version then
     s.specification_version = 3
