@@ -27,7 +27,7 @@ module Sequel
       #
       def table_metadata(table,options={})
 		    columns    = schema table, options
-        attributes = columns.instance_eval{ remove_instance_variable :@features }
+        attributes = columns.instance_variable_get :@features
 		    attributes[:columns] = columns
 		    
 		    # Collect table partitioning information, if applicable.
