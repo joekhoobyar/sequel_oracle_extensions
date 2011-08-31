@@ -104,8 +104,10 @@ module Sequel
         b = filter_expr((Array===b && b.size==1) ? b.first : b)
         a ? SQL::BooleanExpression.new(:AND, a, b) : b
       end
-      @opts[:insert] = @opts[:defaults].merge(@opts[:insert]) if @opts[:defaults]
-      @opts[:insert] = @opts[:insert].merge(@opts[:overrides]) if @opts[:overrides]
+      if Hash === @opts[:insert]
+        @opts[:insert] = @opts[:defaults].merge(@opts[:insert]) if @opts[:defaults]
+        @opts[:insert] = @opts[:insert].merge(@opts[:overrides]) if @opts[:overrides]
+      end
       [:insert, :update, :delete].each do |k|
         @opts[k] = _merge_expressions @opts[k], k!=:delete || nil
       end
