@@ -312,12 +312,22 @@ module Sequel
 
       # Overridden because Oracle has slightly different syntax.
       def alter_table_sql(table, op)
-	      case op[:op]
-        when :add_column
-          "ALTER TABLE #{quote_schema_table(table)} ADD #{column_definition_sql(op)}"
+	      if op[:op] == :add_column
+          subclause = "ADD #{column_definition_sql(op)}"
         else
-          return super(table, op)
+          quoted_name = quote_identifier(op[:name]) if op[:name]
+          case op[:op]
+          when :set_column_type
+            subclause = "MODIFY #{quoted_name} #{type_literal(op)}"
+          when :set_column_default
+            subclause = "MODIFY #{quoted_name} DEFAULT #{literal(op[:default])}"
+          when :set_column_null
+            subclause = "MODIFY #{quoted_name} #{op[:null] ? 'NULL' : 'NOT NULL'}"
+          else
+	          return super(table, op)
+          end
         end
+        "ALTER TABLE #{quote_schema_table(table)} #{subclause}"
 	    end
 	    
       # Overridden to support various Oracle-specific options.
