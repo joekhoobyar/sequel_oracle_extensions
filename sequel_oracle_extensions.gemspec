@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = "sequel_oracle_extensions"
-  s.version = "0.6.6"
+  s.version = "0.6.7"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Joe Khoobyar"]
-  s.date = "2011-08-31"
+  s.date = "2012-01-19"
   s.description = "Oracle extensions for Sequel, including MERGE statements, optimizer hints, and schema extensions."
   s.email = "joe@ankhcraft.com"
   s.extra_rdoc_files = [
@@ -35,7 +35,7 @@ Gem::Specification.new do |s|
   ]
   s.homepage = "http://github.com/joekhoobyar/sequel_oracle_extensions"
   s.require_paths = ["lib"]
-  s.rubygems_version = "1.8.10"
+  s.rubygems_version = "1.8.11"
   s.summary = "Oracle MERGE, optimizer hints, and schema extensions for Sequel"
 
   if s.respond_to? :specification_version then
