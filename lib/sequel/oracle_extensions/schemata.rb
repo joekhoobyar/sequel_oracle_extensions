@@ -4,6 +4,17 @@ Sequel.require 'adapters/shared/oracle'
 # The oracle_schemata extension adds some schema related methods to the Oracle database adapater.
 module Sequel
   module Oracle
+    module AlterTableExtensions
+
+      # Modifies a constraint on the table.
+      #
+      #   modify_constraint(:unique_name, :rely=>true) # DROP CONSTRAINT unique_name CASCADE
+      def modify_constraint(name, table, opts = {})
+        @operations << {:op => :modify_constraint, :table => table, :name => name}.merge(opts)
+      end
+
+    end
+    
     module DatabaseMethods
       
       # Specifies flag attributes which are considered implicit and, thus, do not require DDL clauses.
@@ -323,6 +334,8 @@ module Sequel
             subclause = "MODIFY #{quoted_name} DEFAULT #{literal(op[:default])}"
           when :set_column_null
             subclause = "MODIFY #{quoted_name} #{op[:null] ? 'NULL' : 'NOT NULL'}"
+          when :modify_constraint
+            subclause = "MODIFY #{constraint_definition_sql(op)}"
           else
 	          return super(table, op)
           end
@@ -553,6 +566,8 @@ end
 
 Sequel.require 'adapters/oracle' unless defined? ::Sequel::Oracle::Database
 ::Sequel::Oracle::Database.class_eval do
-  #remove_method :schema_parse_table
   include ::Sequel::Oracle::DatabaseExtensions
+end
+::Sequel::Schema::AlterTableGenerator.class_eval do
+  include ::Sequel::Oracle::AlterTableExtensions
 end
