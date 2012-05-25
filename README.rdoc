@@ -14,4 +14,4 @@ Oracle extensions for  Sequel, including MERGE statements, optimizer hints, and 
 
 == Copyright
 
-Copyright (c) 2010 Joe Khoobyar. See LICENSE for details.
+Copyright (c) 2010-2012 Joe Khoobyar. See LICENSE for details.

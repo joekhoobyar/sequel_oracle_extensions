@@ -1,12 +1,14 @@
-require 'rubygems'
 require 'pp'
+
+# Support colors on Windows platforms.
 begin require 'win32console' and include Win32::Console::ANSI
 rescue LoadError
-end if RUBY_PLATFORM =~ /msvc|mingw|cygwin|win32/
+end if ENV['COLOR']!=0 and RUBY_PLATFORM =~ /msvc|mingw|cygwin|win32/
 
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 require 'sequel'
+
 require "rspec"
 
 DATABASE_URL = begin
