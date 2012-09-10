@@ -9,8 +9,9 @@ module Sequel
 	    constants.grep(/_CLAUSE_METHODS$/).each do |k|
 	      type = k[0,k.length - 15].downcase
 	      meth = :"#{type}_hint_sql"
-			  unless const_get(k).include? meth
-		      list = remove_const(k).dup
+	      list = const_get(k).dup
+			  unless list.include? meth
+		      remove_const k
 		      begin list = [list.shift, meth].concat(list)
 		      ensure const_set k, list
 		      end
