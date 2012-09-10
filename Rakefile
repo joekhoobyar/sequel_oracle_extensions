@@ -10,8 +10,9 @@ begin
     gem.email = "joe@ankhcraft.com"
     gem.homepage = "http://github.com/joekhoobyar/sequel_oracle_extensions"
     gem.authors = ["Joe Khoobyar"]
-    gem.add_dependency "sequel", ">= 3.39.0" 
-    gem.add_development_dependency "rspec", ">= 2.0.0"
+    gem.add_dependency "sequel", ">= 3.39" 
+    gem.add_runtime_dependency "ruby-oci8", ">= 2.1"
+    gem.add_development_dependency "rspec", ">= 2.0"
   end
   Jeweler::GemcutterTasks.new
 rescue LoadError
