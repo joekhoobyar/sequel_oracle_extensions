@@ -5,7 +5,7 @@
 
 Gem::Specification.new do |s|
   s.name = "sequel_oracle_extensions"
-  s.version = "0.6.7"
+  s.version = "0.7.0.rc0"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Joe Khoobyar"]
@@ -35,21 +35,21 @@ Gem::Specification.new do |s|
   ]
   s.homepage = "http://github.com/joekhoobyar/sequel_oracle_extensions"
   s.require_paths = ["lib"]
-  s.rubygems_version = "1.8.11"
+  s.rubygems_version = "1.8.24"
   s.summary = "Oracle MERGE, optimizer hints, and schema extensions for Sequel"
 
   if s.respond_to? :specification_version then
     s.specification_version = 3
 
     if Gem::Version.new(Gem::VERSION) >= Gem::Version.new('1.2.0') then
-      s.add_runtime_dependency(%q<sequel>, [">= 3.25.0"])
+      s.add_runtime_dependency(%q<sequel>, [">= 3.39.0"])
       s.add_development_dependency(%q<rspec>, [">= 2.0.0"])
     else
-      s.add_dependency(%q<sequel>, [">= 3.25.0"])
+      s.add_dependency(%q<sequel>, [">= 3.39.0"])
       s.add_dependency(%q<rspec>, [">= 2.0.0"])
     end
   else
-    s.add_dependency(%q<sequel>, [">= 3.25.0"])
+    s.add_dependency(%q<sequel>, [">= 3.39.0"])
     s.add_dependency(%q<rspec>, [">= 2.0.0"])
   end
 end
